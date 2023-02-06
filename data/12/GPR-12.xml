@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GPR>
+  <part id="P1">
+    <group>
+      <group>
+        <group>
+          <note id="P1-1-1" />
+          <note id="P1-2-1" />
+          <note id="P1-2-2" />
+          <note id="P1-2-3" />
+          <note id="P1-2-4" />
+          <note id="P1-2-5" />
+          <note id="P1-2-6" />
+        </group>
+        <applied rule="3c" />
+        <group>
+          <note id="P1-3-1" />
+          <note id="P1-3-2" />
+          <note id="P1-3-3" />
+          <note id="P1-3-4" />
+        </group>
+        <applied rule="3c" />
+        <applied rule="3d" />
+        <applied rule="6" />
+        <group>
+          <note id="P1-4-1" />
+          <note id="P1-4-2" />
+          <note id="P1-4-3" />
+          <note id="P1-4-4" />
+          <note id="P1-5-1" />
+        </group>
+      </group>
+      <applied rule="2a" />
+      <applied rule="2b" />
+      <applied rule="5" />
+      <group>
+        <group>
+          <group>
+            <note id="P1-6-1" />
+            <note id="P1-6-2" />
+            <note id="P1-6-3" />
+            <note id="P1-6-4" />
+          </group>
+          <applied rule="3d" />
+          <group>
+            <note id="P1-7-1" />
+            <note id="P1-7-2" />
+            <note id="P1-7-3" />
+          </group>
+        </group>
+        <applied rule="2a" />
+        <applied rule="2b" />
+        <applied rule="6" />
+        <group>
+          <group>
+            <note id="P1-8-1" />
+            <note id="P1-8-2" />
+            <note id="P1-8-3" />
+            <note id="P1-8-4" />
+          </group>
+          <applied rule="3d" />
+          <group>
+            <note id="P1-9-1" />
+            <note id="P1-9-2" />
+            <note id="P1-9-3" />
+          </group>
+        </group>
+      </group>
+    </group>
+  </part>
+</GPR>
+

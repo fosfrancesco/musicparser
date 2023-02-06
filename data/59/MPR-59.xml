@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPR>
+  <part id="P1">
+    <metric dot="6" at="0.0">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.16666666666666666" rule="5c" />
+      <applied level="0.3333333333333333" rule="3" />
+      <applied level="0.3333333333333333" rule="5c" />
+      <applied level="1.0" rule="3" />
+      <applied level="1.0" rule="5c" />
+      <applied level="3.0" rule="3" />
+      <applied level="3.0" rule="5c" />
+      <applied level="6.0" rule="3" />
+      <applied level="6.0" rule="5c" />
+      <applied level="12.0" rule="3" />
+      <note id="P1-1-1" />
+    </metric>
+    <metric dot="1" at="0.16666666666666666" />
+    <metric dot="2" at="0.3333333333333333">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.3333333333333333" rule="3" />
+      <note id="P1-1-2" />
+    </metric>
+    <metric dot="1" at="0.5" />
+    <metric dot="2" at="0.6666666666666666">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.3333333333333333" rule="3" />
+      <note id="P1-1-3" />
+    </metric>
+    <metric dot="1" at="0.8333333333333334" />
+    <metric dot="3" at="1.0">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.16666666666666666" rule="5a" />
+      <applied level="0.3333333333333333" rule="3" />
+      <applied level="0.3333333333333333" rule="5a" />
+      <applied level="1.0" rule="3" />
+      <applied level="1.0" rule="5a" />
+      <note id="P1-1-4" />
+    </metric>
+    <metric dot="1" at="1.1666666666666667" />
+    <metric dot="2" at="1.3333333333333333" />
+    <metric dot="1" at="1.5" />
+    <metric dot="2" at="1.6666666666666667" />
+    <metric dot="1" at="1.8333333333333333" />
+    <metric dot="3" at="2.0" />
+    <metric dot="1" at="2.1666666666666665" />
+    <metric dot="2" at="2.3333333333333335" />
+    <metric dot="1" at="2.5">
+      <applied level="0.16666666666666666" rule="3" />
+      <note id="P1-1-5" />
+    </metric>
+    <metric dot="2" at="2.6666666666666665" />
+    <metric dot="1" at="2.8333333333333335" />
+    <metric dot="4" at="3.0">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.3333333333333333" rule="3" />
+      <applied level="1.0" rule="3" />
+      <applied level="3.0" rule="3" />
+      <note id="P1-2-1" />
+    </metric>
+    <metric dot="1" at="3.1666666666666665" />
+    <metric dot="2" at="3.3333333333333335">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.3333333333333333" rule="3" />
+      <note id="P1-2-2" />
+    </metric>
+    <metric dot="1" at="3.5" />
+    <metric dot="2" at="3.6666666666666665">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.3333333333333333" rule="3" />
+      <note id="P1-2-3" />
+    </metric>
+    <metric dot="1" at="3.8333333333333335" />
+    <metric dot="3" at="4.0">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.16666666666666666" rule="5a" />
+      <applied level="0.3333333333333333" rule="3" />
+      <applied level="0.3333333333333333" rule="5a" />
+      <applied level="1.0" rule="3" />
+      <applied level="1.0" rule="5a" />
+      <note id="P1-2-4" />
+    </metric>
+    <metric dot="1" at="4.166666666666667" />
+    <metric dot="2" at="4.333333333333333" />
+    <metric dot="1" at="4.5" />
+    <metric dot="2" at="4.666666666666667" />
+    <metric dot="1" at="4.833333333333333" />
+    <metric dot="3" at="5.0">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.3333333333333333" rule="3" />
+      <applied level="1.0" rule="3" />
+      <note id="P1-2-5" />
+    </metric>
+    <metric dot="1" at="5.166666666666667" />
+    <metric dot="2" at="5.333333333333333" />
+    <metric dot="1" at="5.5" />
+    <metric dot="2" at="5.666666666666667" />
+    <metric dot="1" at="5.833333333333333" />
+    <metric dot="5" at="6.0">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.16666666666666666" rule="5a" />
+      <applied level="0.16666666666666666" rule="5c" />
+      <applied level="0.3333333333333333" rule="3" />
+      <applied level="0.3333333333333333" rule="5a" />
+      <applied level="0.3333333333333333" rule="5c" />
+      <applied level="1.0" rule="3" />
+      <applied level="1.0" rule="5a" />
+      <applied level="1.0" rule="5c" />
+      <applied level="3.0" rule="3" />
+      <applied level="6.0" rule="3" />
+      <note id="P1-3-1" />
+    </metric>
+    <metric dot="1" at="6.166666666666667" />
+    <metric dot="2" at="6.333333333333333" />
+    <metric dot="1" at="6.5" />
+    <metric dot="2" at="6.666666666666667" />
+    <metric dot="1" at="6.833333333333333" />
+    <metric dot="3" at="7.0" />
+    <metric dot="1" at="7.166666666666667" />
+    <metric dot="2" at="7.333333333333333" />
+    <metric dot="1" at="7.5">
+      <applied level="0.16666666666666666" rule="3" />
+      <note id="P1-3-2" />
+    </metric>
+    <metric dot="2" at="7.666666666666667" />
+    <metric dot="1" at="7.833333333333333" />
+    <metric dot="3" at="8.0">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.16666666666666666" rule="5c" />
+      <applied level="0.3333333333333333" rule="3" />
+      <applied level="0.3333333333333333" rule="5c" />
+      <applied level="1.0" rule="3" />
+      <applied level="1.0" rule="5c" />
+      <note id="P1-3-3" />
+    </metric>
+    <metric dot="1" at="8.166666666666666" />
+    <metric dot="2" at="8.333333333333334">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.3333333333333333" rule="3" />
+      <note id="P1-3-4" />
+    </metric>
+    <metric dot="1" at="8.5" />
+    <metric dot="2" at="8.666666666666666">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.3333333333333333" rule="3" />
+      <note id="P1-3-5" />
+    </metric>
+    <metric dot="1" at="8.833333333333334" />
+    <metric dot="4" at="9.0">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.16666666666666666" rule="5a" />
+      <applied level="0.3333333333333333" rule="3" />
+      <applied level="0.3333333333333333" rule="5a" />
+      <applied level="1.0" rule="3" />
+      <applied level="1.0" rule="5a" />
+      <applied level="3.0" rule="3" />
+      <note id="P1-4-1" />
+    </metric>
+    <metric dot="1" at="9.166666666666666" />
+    <metric dot="2" at="9.333333333333334" />
+    <metric dot="1" at="9.5" />
+    <metric dot="2" at="9.666666666666666" />
+    <metric dot="1" at="9.833333333333334" />
+    <metric dot="3" at="10.0" />
+    <metric dot="1" at="10.166666666666666" />
+    <metric dot="2" at="10.333333333333334" />
+    <metric dot="1" at="10.5" />
+    <metric dot="2" at="10.666666666666666" />
+    <metric dot="1" at="10.833333333333334" />
+    <metric dot="3" at="11.0" />
+    <metric dot="1" at="11.166666666666666" />
+    <metric dot="2" at="11.333333333333334" />
+    <metric dot="1" at="11.5" />
+    <metric dot="2" at="11.666666666666666" />
+    <metric dot="1" at="11.833333333333334" />
+    <metric dot="5" at="12.0">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.16666666666666666" rule="5a" />
+      <applied level="0.16666666666666666" rule="5c" />
+      <applied level="0.3333333333333333" rule="3" />
+      <applied level="0.3333333333333333" rule="5a" />
+      <applied level="0.3333333333333333" rule="5c" />
+      <applied level="1.0" rule="3" />
+      <applied level="1.0" rule="5a" />
+      <applied level="1.0" rule="5c" />
+      <applied level="3.0" rule="3" />
+      <applied level="6.0" rule="3" />
+      <note id="P1-5-1" />
+    </metric>
+    <metric dot="1" at="12.166666666666666" />
+    <metric dot="2" at="12.333333333333334" />
+    <metric dot="1" at="12.5" />
+    <metric dot="2" at="12.666666666666666" />
+    <metric dot="1" at="12.833333333333334" />
+    <metric dot="3" at="13.0" />
+    <metric dot="1" at="13.166666666666666" />
+    <metric dot="2" at="13.333333333333334" />
+    <metric dot="1" at="13.5">
+      <applied level="0.16666666666666666" rule="3" />
+      <note id="P1-5-2" />
+    </metric>
+    <metric dot="2" at="13.666666666666666" />
+    <metric dot="1" at="13.833333333333334" />
+    <metric dot="3" at="14.0">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.16666666666666666" rule="5c" />
+      <applied level="0.3333333333333333" rule="3" />
+      <applied level="0.3333333333333333" rule="5c" />
+      <applied level="1.0" rule="3" />
+      <applied level="1.0" rule="5c" />
+      <note id="P1-5-3" />
+    </metric>
+    <metric dot="1" at="14.166666666666666" />
+    <metric dot="2" at="14.333333333333334">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.3333333333333333" rule="3" />
+      <note id="P1-5-4" />
+    </metric>
+    <metric dot="1" at="14.5" />
+    <metric dot="2" at="14.666666666666666">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.3333333333333333" rule="3" />
+      <note id="P1-5-5" />
+    </metric>
+    <metric dot="1" at="14.833333333333334" />
+    <metric dot="4" at="15.0">
+      <applied level="0.16666666666666666" rule="3" />
+      <applied level="0.16666666666666666" rule="5a" />
+      <applied level="0.3333333333333333" rule="3" />
+      <applied level="0.3333333333333333" rule="5a" />
+      <applied level="1.0" rule="3" />
+      <applied level="1.0" rule="5a" />
+      <applied level="3.0" rule="3" />
+      <applied level="3.0" rule="5a" />
+      <note id="P1-6-1" />
+    </metric>
+    <metric dot="1" at="15.166666666666666" />
+    <metric dot="2" at="15.333333333333334" />
+    <metric dot="1" at="15.5" />
+    <metric dot="2" at="15.666666666666666" />
+    <metric dot="1" at="15.833333333333334" />
+    <metric dot="3" at="16.0" />
+    <metric dot="1" at="16.166666666666668" />
+    <metric dot="2" at="16.333333333333332" />
+    <metric dot="1" at="16.5" />
+    <metric dot="2" at="16.666666666666668" />
+    <metric dot="1" at="16.833333333333332" />
+    <metric dot="3" at="17.0" />
+    <metric dot="1" at="17.166666666666668" />
+    <metric dot="2" at="17.333333333333332" />
+    <metric dot="1" at="17.5" />
+    <metric dot="2" at="17.666666666666668" />
+    <metric dot="1" at="17.833333333333332" />
+  </part>
+</MPR>
+

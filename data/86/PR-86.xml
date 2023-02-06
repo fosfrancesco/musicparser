@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<prtree>
+  <pr>
+    <head recipe="progression">
+      <chord>
+        <note id="P1-1-1" />
+      </chord>
+    </head>
+    <primary>
+      <pr>
+        <head recipe="weak">
+          <chord>
+            <note id="P1-1-1" />
+          </chord>
+        </head>
+        <primary>
+          <pr>
+            <head recipe="progression">
+              <chord>
+                <note id="P1-1-1" />
+              </chord>
+            </head>
+            <primary>
+              <pr>
+                <head recipe="progression">
+                  <chord>
+                    <note id="P1-1-1" />
+                  </chord>
+                </head>
+              </pr>
+            </primary>
+            <secondary>
+              <pr>
+                <head recipe="weak">
+                  <chord>
+                    <note id="P1-2-1" />
+                  </chord>
+                </head>
+                <primary>
+                  <pr>
+                    <head recipe="progression">
+                      <chord>
+                        <note id="P1-2-1" />
+                      </chord>
+                    </head>
+                    <primary>
+                      <pr>
+                        <head recipe="progression">
+                          <chord>
+                            <note id="P1-2-1" />
+                          </chord>
+                        </head>
+                      </pr>
+                    </primary>
+                    <secondary>
+                      <pr>
+                        <head recipe="progression">
+                          <chord>
+                            <note id="P1-2-2" />
+                          </chord>
+                        </head>
+                      </pr>
+                    </secondary>
+                  </pr>
+                </primary>
+                <secondary>
+                  <pr>
+                    <head recipe="progression">
+                      <chord>
+                        <note id="P1-2-3" />
+                      </chord>
+                    </head>
+                  </pr>
+                </secondary>
+              </pr>
+            </secondary>
+          </pr>
+        </primary>
+        <secondary>
+          <pr>
+            <head recipe="progression">
+              <chord>
+                <note id="P1-4-1" />
+              </chord>
+            </head>
+            <primary>
+              <pr>
+                <head recipe="progression">
+                  <chord>
+                    <note id="P1-4-1" />
+                  </chord>
+                </head>
+              </pr>
+            </primary>
+            <secondary>
+              <pr>
+                <head recipe="progression">
+                  <chord>
+                    <note id="P1-3-1" />
+                  </chord>
+                </head>
+              </pr>
+            </secondary>
+          </pr>
+        </secondary>
+      </pr>
+    </primary>
+    <secondary>
+      <pr>
+        <head recipe="progression">
+          <chord>
+            <note id="P1-7-1" />
+          </chord>
+        </head>
+        <primary>
+          <pr>
+            <head recipe="progression">
+              <chord>
+                <note id="P1-7-1" />
+              </chord>
+            </head>
+          </pr>
+        </primary>
+        <secondary>
+          <pr>
+            <head recipe="progression">
+              <chord>
+                <note id="P1-5-1" />
+              </chord>
+            </head>
+            <primary>
+              <pr>
+                <head recipe="progression">
+                  <chord>
+                    <note id="P1-5-1" />
+                  </chord>
+                </head>
+              </pr>
+            </primary>
+            <secondary>
+              <pr>
+                <head recipe="weak">
+                  <chord>
+                    <note id="P1-6-1" />
+                  </chord>
+                </head>
+                <primary>
+                  <pr>
+                    <head recipe="progression">
+                      <chord>
+                        <note id="P1-6-1" />
+                      </chord>
+                    </head>
+                    <primary>
+                      <pr>
+                        <head recipe="progression">
+                          <chord>
+                            <note id="P1-6-1" />
+                          </chord>
+                        </head>
+                      </pr>
+                    </primary>
+                    <secondary>
+                      <pr>
+                        <head recipe="progression">
+                          <chord>
+                            <note id="P1-6-2" />
+                          </chord>
+                        </head>
+                      </pr>
+                    </secondary>
+                  </pr>
+                </primary>
+                <secondary>
+                  <pr>
+                    <head recipe="progression">
+                      <chord>
+                        <note id="P1-6-3" />
+                      </chord>
+                    </head>
+                  </pr>
+                </secondary>
+              </pr>
+            </secondary>
+          </pr>
+        </secondary>
+      </pr>
+    </secondary>
+  </pr>
+</prtree>
+

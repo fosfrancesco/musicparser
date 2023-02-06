@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<MPR>
+  <part id="P1">
+    <metric dot="1" at="0.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5c" />
+      <note id="P1-1-1" />
+    </metric>
+    <metric dot="6" at="0.5">
+      <applied level="0.5" rule="3" />
+      <applied level="1.5" rule="3" />
+      <applied level="3.0" rule="3" />
+      <applied level="6.0" rule="3" />
+      <applied level="12.0" rule="1" />
+      <applied level="12.0" rule="3" />
+      <applied level="24.0" rule="3" />
+      <note id="P1-2-1" />
+    </metric>
+    <metric dot="1" at="1.0">
+      <applied level="0.5" rule="3" />
+      <note id="P1-2-2" />
+    </metric>
+    <metric dot="1" at="1.5">
+      <applied level="0.5" rule="3" />
+      <note id="P1-2-3" />
+    </metric>
+    <metric dot="2" at="2.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5a" />
+      <applied level="1.5" rule="3" />
+      <note id="P1-2-4" />
+    </metric>
+    <metric dot="1" at="2.5" />
+    <metric dot="1" at="3.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5c" />
+      <note id="P1-2-5" />
+    </metric>
+    <metric dot="3" at="3.5">
+      <applied level="0.5" rule="3" />
+      <applied level="1.5" rule="3" />
+      <applied level="3.0" rule="3" />
+      <note id="P1-3-1" />
+    </metric>
+    <metric dot="1" at="4.0">
+      <applied level="0.5" rule="3" />
+      <note id="P1-3-2" />
+    </metric>
+    <metric dot="1" at="4.5">
+      <applied level="0.5" rule="3" />
+      <note id="P1-3-3" />
+    </metric>
+    <metric dot="2" at="5.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5a" />
+      <applied level="1.5" rule="3" />
+      <note id="P1-3-4" />
+    </metric>
+    <metric dot="1" at="5.5" />
+    <metric dot="1" at="6.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5c" />
+      <note id="P1-3-5" />
+    </metric>
+    <metric dot="4" at="6.5">
+      <applied level="0.5" rule="3" />
+      <applied level="1.5" rule="3" />
+      <applied level="3.0" rule="3" />
+      <applied level="6.0" rule="3" />
+      <note id="P1-4-1" />
+    </metric>
+    <metric dot="1" at="7.0">
+      <applied level="0.5" rule="3" />
+      <note id="P1-4-2" />
+    </metric>
+    <metric dot="1" at="7.5">
+      <applied level="0.5" rule="3" />
+      <note id="P1-4-3" />
+    </metric>
+    <metric dot="2" at="8.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5a" />
+      <applied level="1.5" rule="3" />
+      <note id="P1-4-4" />
+    </metric>
+    <metric dot="1" at="8.5" />
+    <metric dot="1" at="9.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5c" />
+      <note id="P1-4-5" />
+    </metric>
+    <metric dot="3" at="9.5">
+      <applied level="0.5" rule="3" />
+      <applied level="1.5" rule="3" />
+      <applied level="1.5" rule="5a" />
+      <applied level="3.0" rule="3" />
+      <note id="P1-5-1" />
+    </metric>
+    <metric dot="1" at="10.0" />
+    <metric dot="1" at="10.5" />
+    <metric dot="2" at="11.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5a" />
+      <applied level="1.5" rule="3" />
+      <note id="P1-5-2" />
+    </metric>
+    <metric dot="1" at="11.5" />
+    <metric dot="1" at="12.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5c" />
+      <note id="P1-5-3" />
+    </metric>
+    <metric dot="5" at="12.5">
+      <applied level="0.5" rule="3" />
+      <applied level="1.5" rule="3" />
+      <applied level="3.0" rule="3" />
+      <applied level="6.0" rule="3" />
+      <applied level="12.0" rule="1" />
+      <applied level="12.0" rule="3" />
+      <note id="P1-6-1" />
+    </metric>
+    <metric dot="1" at="13.0">
+      <applied level="0.5" rule="3" />
+      <note id="P1-6-2" />
+    </metric>
+    <metric dot="1" at="13.5">
+      <applied level="0.5" rule="3" />
+      <note id="P1-6-3" />
+    </metric>
+    <metric dot="2" at="14.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5a" />
+      <applied level="1.5" rule="3" />
+      <note id="P1-6-4" />
+    </metric>
+    <metric dot="1" at="14.5" />
+    <metric dot="1" at="15.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5c" />
+      <note id="P1-6-5" />
+    </metric>
+    <metric dot="3" at="15.5">
+      <applied level="0.5" rule="3" />
+      <applied level="1.5" rule="3" />
+      <applied level="3.0" rule="3" />
+      <note id="P1-7-1" />
+    </metric>
+    <metric dot="1" at="16.0">
+      <applied level="0.5" rule="3" />
+      <note id="P1-7-2" />
+    </metric>
+    <metric dot="1" at="16.5">
+      <applied level="0.5" rule="3" />
+      <note id="P1-7-3" />
+    </metric>
+    <metric dot="2" at="17.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5a" />
+      <applied level="1.5" rule="3" />
+      <note id="P1-7-4" />
+    </metric>
+    <metric dot="1" at="17.5" />
+    <metric dot="1" at="18.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5c" />
+      <note id="P1-7-5" />
+    </metric>
+    <metric dot="4" at="18.5">
+      <applied level="0.5" rule="3" />
+      <applied level="1.5" rule="3" />
+      <applied level="3.0" rule="3" />
+      <applied level="6.0" rule="3" />
+      <note id="P1-8-1" />
+    </metric>
+    <metric dot="1" at="19.0">
+      <applied level="0.5" rule="3" />
+      <note id="P1-8-2" />
+    </metric>
+    <metric dot="1" at="19.5">
+      <applied level="0.5" rule="3" />
+      <note id="P1-8-3" />
+    </metric>
+    <metric dot="2" at="20.0">
+      <applied level="0.5" rule="3" />
+      <applied level="0.5" rule="5a" />
+      <applied level="1.5" rule="3" />
+      <note id="P1-8-4" />
+    </metric>
+    <metric dot="1" at="20.5" />
+    <metric dot="1" at="21.0">
+      <applied level="0.5" rule="3" />
+      <note id="P1-8-5" />
+    </metric>
+    <metric dot="3" at="21.5">
+      <applied level="0.5" rule="3" />
+      <applied level="1.5" rule="3" />
+      <applied level="3.0" rule="3" />
+      <note id="P1-9-1" />
+    </metric>
+    <metric dot="1" at="22.0" />
+    <metric dot="1" at="22.5" />
+    <metric dot="2" at="23.0" />
+    <metric dot="1" at="23.5" />
+  </part>
+</MPR>
+

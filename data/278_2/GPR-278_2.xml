@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GPR>
+  <part id="P1">
+    <group>
+      <applied rule="2a" />
+      <group>
+        <group>
+          <note id="P1-1-2" />
+          <note id="P1-2-1" />
+          <applied rule="2b" />
+          <applied rule="4" />
+          <note id="P1-2-2" />
+          <applied rule="2a" />
+          <applied rule="2b" />
+          <note id="P1-2-3" />
+          <note id="P1-2-4" />
+          <applied rule="3d" />
+          <note id="P1-2-5" />
+          <applied rule="2b" />
+          <note id="P1-2-6" />
+        </group>
+        <group>
+          <note id="P1-2-7" />
+          <applied rule="3a" />
+          <applied rule="6" />
+          <note id="P1-3-1" />
+          <applied rule="2b" />
+          <applied rule="6" />
+          <note id="P1-3-2" />
+          <applied rule="3a" />
+          <note id="P1-3-3" />
+          <applied rule="2b" />
+          <applied rule="6" />
+          <note id="P1-3-4" />
+          <applied rule="6" />
+          <note id="P1-3-5" />
+          <applied rule="2b" />
+          <applied rule="6" />
+          <note id="P1-3-6" />
+        </group>
+      </group>
+      <applied rule="6" />
+      <group>
+        <group>
+          <note id="P1-3-7" />
+          <note id="P1-4-1" />
+          <applied rule="2b" />
+          <note id="P1-4-2" />
+          <applied rule="3a" />
+          <applied rule="4" />
+          <note id="P1-4-3" />
+          <note id="P1-4-4" />
+          <applied rule="3a" />
+          <applied rule="4" />
+          <note id="P1-4-5" />
+        </group>
+        <applied rule="3d" />
+        <group>
+          <note id="P1-5-1" />
+          <applied rule="3a" />
+          <applied rule="4" />
+          <note id="P1-5-2" />
+          <note id="P1-5-3" />
+          <applied rule="3d" />
+          <note id="P1-5-4" />
+          <note id="P1-5-5" />
+          <note id="P1-5-6" />
+          <note id="P1-5-7" />
+          <applied rule="3a" />
+          <applied rule="4" />
+          <note id="P1-5-8" />
+          <note id="P1-5-9" />
+          <note id="P1-5-10" />
+        </group>
+      </group>
+    </group>
+  </part>
+</GPR>
+

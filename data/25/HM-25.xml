@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<region label="d">
+  <chord-span deg="I">
+    <note id="P1-1-1" />
+  </chord-span>
+  <chord-span deg="V/I">
+    <note id="P1-1-2" />
+  </chord-span>
+  <chord-span deg="VI">
+    <note id="P1-2-1" />
+  </chord-span>
+  <chord-span deg="V">
+    <note id="P1-2-2" />
+  </chord-span>
+  <chord-span deg="I">
+    <note id="P1-2-3" />
+    <note id="P1-2-4" />
+    <note id="P1-2-5" />
+  </chord-span>
+  <chord-span deg="VI">
+    <note id="P1-2-6" />
+  </chord-span>
+  <chord-span deg="III">
+    <note id="P1-3-1" />
+    <note id="P1-3-3" />
+  </chord-span>
+  <chord-span deg="VII">
+    <note id="P1-3-4" />
+  </chord-span>
+  <chord-span deg="IV/V9">
+    <note id="P1-3-5" />
+  </chord-span>
+  <chord-span deg="IV">
+    <note id="P1-4-1" />
+  </chord-span>
+  <chord-span deg="V/I">
+    <note id="P1-4-2" />
+  </chord-span>
+  <chord-span deg="IV">
+    <note id="P1-4-3" />
+  </chord-span>
+  <chord-span deg="I">
+    <note id="P1-4-4" />
+  </chord-span>
+  <chord-span deg="II7">
+    <note id="P1-4-5" />
+  </chord-span>
+  <chord-span deg="V/I">
+    <note id="P1-4-6" />
+  </chord-span>
+  <chord-span deg="VI">
+    <note id="P1-5-1" />
+    <note id="P1-5-2" />
+  </chord-span>
+  <chord-span deg="V7">
+    <note id="P1-5-3" />
+    <note id="P1-5-4" />
+  </chord-span>
+  <chord-span deg="I">
+    <note id="P1-5-5" />
+  </chord-span>
+  <chord-span deg="V/I">
+    <note id="P1-5-6" />
+  </chord-span>
+  <chord-span deg="VI">
+    <note id="P1-6-1" />
+  </chord-span>
+  <chord-span deg="V">
+    <note id="P1-6-2" />
+  </chord-span>
+  <chord-span deg="I">
+    <note id="P1-6-3" />
+    <note id="P1-6-4" />
+    <note id="P1-6-5" />
+  </chord-span>
+  <chord-span deg="VI">
+    <note id="P1-6-6" />
+  </chord-span>
+  <chord-span deg="III">
+    <note id="P1-7-1" />
+  </chord-span>
+  <chord-span deg="I">
+    <note id="P1-7-3" />
+  </chord-span>
+  <chord-span deg="VII">
+    <note id="P1-7-4" />
+  </chord-span>
+  <chord-span deg="IV/V9">
+    <note id="P1-7-5" />
+  </chord-span>
+  <chord-span deg="IV">
+    <note id="P1-8-1" />
+  </chord-span>
+  <chord-span deg="V/I">
+    <note id="P1-8-2" />
+  </chord-span>
+  <chord-span deg="IV">
+    <note id="P1-8-3" />
+  </chord-span>
+  <chord-span deg="VI">
+    <note id="P1-8-4" />
+  </chord-span>
+  <chord-span deg="I">
+    <note id="P1-8-5" />
+  </chord-span>
+  <chord-span deg="V7">
+    <note id="P1-8-6" />
+  </chord-span>
+  <chord-span deg="I">
+    <note id="P1-9-1" />
+  </chord-span>
+</region>
+

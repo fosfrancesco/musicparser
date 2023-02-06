@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GPR>
+  <part id="P1">
+    <group>
+      <applied rule="2a" />
+      <group>
+        <group>
+          <note id="P1-1-2" />
+          <note id="P1-2-1" />
+          <note id="P1-2-2" />
+          <note id="P1-3-1" />
+          <note id="P1-3-2" />
+          <note id="P1-4-1" />
+        </group>
+        <applied rule="2b" />
+        <group>
+          <group>
+            <note id="P1-5-1" />
+            <note id="P1-5-2" />
+            <note id="P1-6-1" />
+          </group>
+          <applied rule="3a" />
+          <applied rule="3d" />
+          <applied rule="4" />
+          <group>
+            <note id="P1-6-2" />
+            <note id="P1-6-3" />
+            <applied rule="3d" />
+            <note id="P1-7-1" />
+            <note id="P1-7-2" />
+            <applied rule="3a" />
+            <applied rule="4" />
+            <note id="P1-8-1" />
+            <applied rule="2b" />
+            <applied rule="6" />
+            <note id="P1-9-1" />
+          </group>
+        </group>
+      </group>
+      <applied rule="2a" />
+      <applied rule="2b" />
+      <applied rule="4" />
+      <group>
+        <group>
+          <note id="P1-9-3" />
+          <applied rule="3a" />
+          <applied rule="4" />
+          <note id="P1-10-1" />
+          <note id="P1-10-2" />
+          <note id="P1-11-1" />
+          <note id="P1-11-2" />
+          <note id="P1-12-1" />
+        </group>
+        <applied rule="2b" />
+        <group>
+          <group>
+            <note id="P1-13-1" />
+            <applied rule="3a" />
+            <applied rule="4" />
+            <note id="P1-13-2" />
+            <note id="P1-14-1" />
+          </group>
+          <applied rule="3a" />
+          <applied rule="3d" />
+          <applied rule="4" />
+          <group>
+            <note id="P1-14-2" />
+            <note id="P1-14-3" />
+            <applied rule="3d" />
+            <note id="P1-15-1" />
+            <note id="P1-16-1" />
+          </group>
+        </group>
+      </group>
+    </group>
+  </part>
+</GPR>
+

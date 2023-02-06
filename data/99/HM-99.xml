@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<region label="cis">
+  <chord-span deg="V">
+    <note id="P1-1-1" />
+  </chord-span>
+  <chord-span deg="I">
+    <note id="P1-2-1" />
+  </chord-span>
+  <chord-span deg="V/V7">
+    <note id="P1-3-1" />
+  </chord-span>
+  <chord-span deg="V7">
+    <note id="P1-4-2" />
+    <note id="P1-4-3" />
+    <note id="P1-4-5" />
+    <note id="P1-4-6" />
+    <note id="P1-5-2" />
+    <note id="P1-5-3" />
+    <note id="P1-5-5" />
+  </chord-span>
+  <chord-span deg="I">
+    <note id="P1-5-6" />
+  </chord-span>
+  <chord-span deg="VI">
+    <note id="P1-6-1" />
+  </chord-span>
+  <chord-span deg="_V9//I">
+    <note id="P1-7-1" />
+  </chord-span>
+  <region label="A">
+    <chord-span deg="V">
+      <note id="P1-8-2" />
+      <note id="P1-8-3" />
+      <note id="P1-8-5" />
+      <note id="P1-8-6" />
+    </chord-span>
+    <chord-span deg="I">
+      <note id="P1-9-2" />
+      <note id="P1-9-3" />
+      <note id="P1-9-5" />
+    </chord-span>
+  </region>
+  <chord-span deg="_V9">
+    <note id="P1-9-6" />
+  </chord-span>
+</region>
+
