@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule
+import torch_geometric as pyg
 
 
 class RNNEncoder(torch.nn.Module):
@@ -108,13 +109,9 @@ class ArcDecoder(torch.nn.Module):
         self.lin1 = nn.Linear(2 * hidden_channels, hidden_channels)
         self.lin2 = nn.Linear(hidden_channels, 1)
 
-    def forward(self, z):
-        indices = torch.arange(len(z))
-        cart_prod = torch.cartesian_prod(indices,indices)
-        # remove self loops, since we don't predict on these
-        cart_prod = cart_prod[cart_prod[:,0]!=cart_prod[:,1]]
+    def forward(self, z, pot_arcs):
         # concatenate the embeddings of the two elements
-        z = torch.cat([z[cart_prod[:,0]],z[cart_prod[:,1]]],dim=-1)
+        z = torch.cat([z[pot_arcs[:,0]],z[pot_arcs[:,1]]],dim=-1)
         # predict
         z = self.lin1(z)
         z = self.activation(z)
@@ -128,11 +125,11 @@ class ArcPredictionModel(nn.Module):
 		self.encoder = RNNEncoder(input_dim, hidden_dim, num_layers)
 		self.decoder = ArcDecoder(hidden_dim, activation=activation)
 
-	def forward(self, note_features):
+	def forward(self, note_features, pot_arcs):
 		z = self.encoder(note_features)
-		return self.decoder(z)
+		return self.decoder(z, pot_arcs)
 
-class VoiceLinkPredictionLightModelPG(LightningModule):
+class ArcPredictionLightModel(LightningModule):
     def __init__(
         self,
         in_feats,
@@ -156,11 +153,12 @@ class VoiceLinkPredictionLightModelPG(LightningModule):
             dropout=dropout,
         ).double()
         self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
+        self.val_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
 
     def training_step(self, batch, batch_idx):
-        note_seq, truth_arcs,  truth_arcs_mask = batch[0]
+        note_seq, truth_arcs,  truth_arcs_mask, pot_arcs = batch[0]
         num_notes = len(note_seq)
-        arc_pred_mask_logits = self.module(note_seq)
+        arc_pred_mask_logits = self.module(note_seq, pot_arcs)
         loss = self.train_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float())
         # get predicted class for the edges (e.g. 0 or 1)
         # arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
@@ -170,47 +168,22 @@ class VoiceLinkPredictionLightModelPG(LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        graph = batch[0]
-        if self.rev_edges is not None:
-            add_reverse_edges(graph, mode=self.rev_edges)
-        pot_edges = graph["pot_edges"]
-        num_notes = len(graph.x_dict["note"])
-        edge_target = graph["truth_edges"]
-        onsets = graph["note"].onset_div
-        durations = graph["note"].duration_div
-        pitches = graph["note"].pitch
-        onset_beats = graph["note"].onset_beat
-        duration_beats = graph["note"].duration_beat
-        ts_beats = graph["note"].ts_beats
-        edge_pred_mask_logits = self.module(
-            graph.x_dict, graph.edge_index_dict, pot_edges, onsets, durations, pitches, onset_beats, duration_beats, ts_beats
-        )
-        edge_pred__mask_normalized = torch.sigmoid(edge_pred_mask_logits)
-        self.val_metric_logging_step(
-            edge_pred__mask_normalized, pot_edges, edge_target, num_notes, linear_assignment=self.linear_assignment
-        )
-
-    def test_step(self, batch, batch_idx):
-        graph = batch[0]
-        if self.rev_edges is not None:
-            add_reverse_edges(graph, mode=self.rev_edges)
-        pot_edges = graph["pot_edges"]
-        num_notes = len(graph.x_dict["note"])
-        edge_target = graph["truth_edges"]
-        onsets = graph["note"].onset_div
-        durations = graph["note"].duration_div
-        pitches = graph["note"].pitch
-        onset_beats = graph["note"].onset_beat
-        duration_beats = graph["note"].duration_beat
-        ts_beats = graph["note"].ts_beats
-        edge_pred_mask_logits = self.module(
-            graph.x_dict, graph.edge_index_dict, pot_edges, onsets, durations, pitches, onset_beats, duration_beats, ts_beats
-        )
-        edge_pred__mask_normalized = torch.sigmoid(edge_pred_mask_logits)
-        # log without linear assignment
-        self.test_metric_logging_step(
-            edge_pred__mask_normalized, pot_edges, edge_target, num_notes
-        )
+        note_seq, truth_arcs,  truth_arcs_mask, pot_arcs = batch[0]
+        num_notes = len(note_seq)
+        arc_pred_mask_logits = self.module(note_seq)
+        arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
+        pred_arc = pot_arcs[:, torch.round(arc_pred__mask_normalized).squeeze().bool()]
+        # compute pred and ground truth adj matrices
+        if torch.sum(pred_arc) > 0:
+            adj_pred = pyg.utils.to_dense_adj(pred_arc, max_num_nodes=num_notes).squeeze().cpu()
+        else: # to avoid exception in to_dense_adj when there is no predicted edge
+            adj_pred = torch.zeros((num_notes, num_notes)).squeeze().to(self.device).cpu()
+        # compute loss and F1 score
+        adj_target = pyg.utils.to_dense_adj(truth_arcs, max_num_nodes=num_notes).squeeze().long().cpu()
+        loss = self.val_loss(adj_pred.float(), adj_target.float())
+        val_fscore = self.val_f1_score.cpu()(adj_pred.flatten(), adj_target.flatten())
+        self.log("val_loss", loss.item(), batch_size=1)
+        self.log("val_fscore", val_fscore.item(), prog_bar=True, batch_size=1)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
