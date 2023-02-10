@@ -4,6 +4,47 @@ import xml.etree.ElementTree as ET
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import partitura as pt
+from pytorch_lightning import LightningDataModule
+from torch.utils.data import DataLoader
+import torch
+from sklearn.model_selection import train_test_split
+
+
+class TSDataModule(LightningDataModule):
+    def __init__(self, batch_size=1, num_workers=4, force_reload=False, test_collection=None):
+        super(TSDataModule, self).__init__()
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.dataset = TSDataset(Path("data"))
+        # self.features = self.dataset.features
+        # self.test_collection = test_collection
+
+    def prepare_data(self):
+        pass
+
+    def setup(self, stage=None):
+        idxs = range(len(self.dataset)).long()
+        trainval_idx, test_idx = train_test_split(idxs, test_size=0.3, random_state=0)
+        train_idx, val_idx = train_test_split(trainval_idx, test_size=0.1, random_state=0)
+
+        self.dataset_train = self.dataset[train_idx]
+        self.dataset_val = self.dataset[val_idx]
+        self.dataset_test = self.dataset[test_idx]
+        # self.dataset_predict = self.dataset[test_idx[:5]]
+        print(f"Running evaluation on collection {self.test_collection}")
+        print(f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}")
+            
+    def train_dataloader(self):
+        return DataLoader(self.dataset_train, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True)
+
+    def val_dataloader(self):
+        return DataLoader(self.dataset_val, batch_size=self.batch_size, num_workers=self.num_workers)
+
+    def test_dataloader(self) :
+        return DataLoader(self.dataset_test, batch_size=self.batch_size, num_workers=self.num_workers)
+
+    # def predict_dataloader(self):
+    #     return DataLoader(self.dataset_predict, batch_size=self.batch_size, num_workers=self.num_workers)
 
 
 class TSDataset(Dataset):
@@ -17,19 +58,66 @@ class TSDataset(Dataset):
         self.data_df = get_data_df(data_folder)
         self.note_features = []
         self.dep_arcs = []
+        self.truth_masks = []
         for title, score_file, ts_xml_file in self.data_df.values:
-            print("Processing", title)
-            n_feat, d_arc = get_note_features_and_dep_arcs(score_file, ts_xml_file)
-            self.note_features.append(n_feat)
-            self.dep_arcs.append(d_arc)
+            try:
+                n_feat, d_arc = get_note_features_and_dep_arcs(score_file, ts_xml_file)
+                nfeat = torch.tensor(n_feat)
+                d_arc = torch.tensor(d_arc)
+                self.note_features.append(n_feat)
+                self.dep_arcs.append(d_arc)
+                all_arcs = torch.cartesian_prod(torch.arange(len(n_feat)),torch.arange(len(n_feat)))
+                self.truth_masks.append(get_edges_mask(d_arc, all_arcs))
+            except Exception as e:
+                print(f"!!!!! Error with {title}", e)
 
     def __len__(self):
         return len(self.score_files)
 
     def __getitem__(self, idx):
-        return self.note_features[idx], self.dep_arcs[idx]
+        return self.note_features[idx], self.dep_arcs[idx], self.truth_masks[idx]
 
+def get_edges_mask(subset_edges, total_edges, transpose=False, check_strict_subset=True):
+    """Get a mask of edges to use for training.
+    Parameters
+    ----------
+    subset_edges : np.array
+        A subset of total_edges.
+    total_edges : np.array
+        Total edges.
+    transpose : bool, optional.
+        Whether to transpose the subset_edges, by default True.
+        This is necessary if the input arrays are (2, n) instead of (n, 2)
+    check_strict_subset : bool, optional
+        Whether to check that the subset_edges are a strict subset of total_edges.
+    Returns
+    -------
+    edges_mask : np.array
+        Mask that identifies subset edges from total_edges.
+    dropped_edges : np.array
+        Truth edges that are not in potential edges.
+        This is only returned if check_strict_subset is True.
+    """
+    # convert to numpy, custom types are not supported by torch
+    total_edges = total_edges.numpy() if not isinstance(total_edges, np.ndarray) else total_edges
+    subset_edges = subset_edges.numpy() if not isinstance(subset_edges, np.ndarray) else subset_edges
+    # transpose if r; contiguous is required for the type conversion step later
+    if transpose:
+        total_edges = np.ascontiguousarray(total_edges.T)
+        subset_edges = np.ascontiguousarray(subset_edges.T)
+    # convert (n, 2) array to an n array of bytes, in order to use isin, that only works with 1d arrays
+    # view_total = total_edges.view(np.dtype((np.void, total_edges.dtype.itemsize * total_edges.shape[-1])))
+    # view_subset = subset_edges.view(np.dtype((np.void, subset_edges.dtype.itemsize * subset_edges.shape[-1])))
+    view_total = np.char.array(total_edges.astype(str))
+    view_subset = np.char.array(subset_edges.astype(str))
+    view_total = view_total[:, 0] + "-" + view_total[:, 1]
+    view_subset = view_subset[:, 0] + "-" + view_subset[:, 1]
+    if check_strict_subset:
+        dropped_edges = subset_edges[(~np.isin(view_subset, view_total))]
+        assert(len(dropped_edges) == 0)
+    return torch.from_numpy(np.isin(view_total, view_subset)).squeeze()
 
+        
 def get_score_path(folder):
     score_files = [file for file in folder.iterdir() if file.name.startswith("score")]
     assert(len(score_files) == 1)
@@ -205,9 +293,12 @@ def note_id_to_note_array_index(id, na):
     potential_indices = np.where(na["id"] == id)[0]
     if len(potential_indices) == 1:
         return np.where(na["id"] == id)[0][0]
-    else:
-        print("Problem with note id: ", id)
+    elif id=="r1": # there is a common problem with pickup measures and number of rests
         return 0
+    else:
+        raise Exception("Problem with note id: ", id)
+        # print("Problem with note id: ", id)
+        # return 0
 
 
 def get_dependency_arcs(ts_xml_file, score):
@@ -221,7 +312,7 @@ def get_dependency_arcs(ts_xml_file, score):
     ra__untied_fields = list(ra_untied.dtype.names)
     nra_untied = np.hstack([na_untied[ra__untied_fields],ra_untied])
     nra_untied.sort(order="onset_div")
-    # # keep only one rest row if there are consecutive rests, to comply with gttm notation
+    # keep only one rest row if there are consecutive rests, to comply with gttm notation
     # rest_mask = nra_untied["id"].astype('U1') == "r"
     # consecutive_mask = ~np.insert(np.diff(rest_mask), 0, True)
     # combined_mask = rest_mask * consecutive_mask
