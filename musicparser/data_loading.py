@@ -17,7 +17,8 @@ class TSDataset(Dataset):
         self.data_df = get_data_df(data_folder)
         self.note_features = []
         self.dep_arcs = []
-        for score_file, ts_xml_file in self.data_df.values:
+        for title, score_file, ts_xml_file in self.data_df.values:
+            print("Processing", title)
             n_feat, d_arc = get_note_features_and_dep_arcs(score_file, ts_xml_file)
             self.note_features.append(n_feat)
             self.dep_arcs.append(d_arc)
@@ -29,32 +30,27 @@ class TSDataset(Dataset):
         return self.note_features[idx], self.dep_arcs[idx]
 
 
-def get_score_path(piece_folder):
-    """Retrieve the path to the score file from a piece folder."""
-    # pieces can either be named MSC or start with a number + the title
-    msc_file = [file for file in piece_folder.iterdir() if file.name.startswith("MSC")]
-    numbered_file = [
-        file
-        for file in piece_folder.iterdir()
-        if file.name.startswith(piece_folder.name[:2])
-    ]
-    assert len(msc_file) + len(numbered_file) == 1
-    score_file = msc_file[0] if len(msc_file) == 1 else numbered_file[0]
-    return str(score_file)
+def get_score_path(folder):
+    score_files = [file for file in folder.iterdir() if file.name.startswith("score")]
+    assert(len(score_files) == 1)
+    return str(score_files[0])
 
-
-def get_ts_path(piece_folder):
-    ts_file = [file for file in piece_folder.iterdir() if file.name.startswith("TS")]
-    assert len(ts_file) == 1
+def get_ts_path(folder):
+    ts_file = [file for file in folder.iterdir() if file.name.startswith("TS")]
+    assert(len(ts_file) == 1)
     return str(ts_file[0])
 
+def get_title(folder):
+    title_file = [file for file in folder.iterdir() if file.suffix == ".txt"]
+    assert(len(title_file) == 1)
+    return title_file[0].name
 
 def get_data_df(data_folder):
     list_of_tuples = [
-        (get_score_path(folder), get_ts_path(folder))
+        (get_title(folder), get_score_path(folder), get_ts_path(folder))
         for folder in Path(data_folder).iterdir()
     ]
-    return pd.DataFrame(list_of_tuples, columns=["score", "ts"])
+    return pd.DataFrame(list_of_tuples, columns=["title", "score", "ts"])
 
 
 def ts_xml_to_dependency_tree(xml_file):
@@ -191,7 +187,7 @@ def gttm_id_to_pt_id(gttm_id, measure_mapping, nra_untied):
     """
     measure_number = int(gttm_id.split("-")[1])
     note_number = int(gttm_id.split("-")[2])
-    notes_in_measure = np.where(measure_mapping == measure_number)[0]
+    # notes_in_measure = np.where(measure_mapping == measure_number)[0]
     nra_index = np.where(measure_mapping == measure_number)[0][int(note_number) - 1]
     return nra_untied[nra_index]["id"]
     
@@ -225,11 +221,11 @@ def get_dependency_arcs(ts_xml_file, score):
     ra__untied_fields = list(ra_untied.dtype.names)
     nra_untied = np.hstack([na_untied[ra__untied_fields],ra_untied])
     nra_untied.sort(order="onset_div")
-    # keep only one rest row if there are consecutive rests, to comply with gttm notation
-    rest_mask = nra_untied["id"].astype('U1') == "r"
-    consecutive_mask = ~np.insert(np.diff(rest_mask), 0, True)
-    combined_mask = rest_mask * consecutive_mask
-    nra_untied = nra_untied[~combined_mask]
+    # # keep only one rest row if there are consecutive rests, to comply with gttm notation
+    # rest_mask = nra_untied["id"].astype('U1') == "r"
+    # consecutive_mask = ~np.insert(np.diff(rest_mask), 0, True)
+    # combined_mask = rest_mask * consecutive_mask
+    # nra_untied = nra_untied[~combined_mask]
     # get the gttm-style dependency tree
     m_map = score.parts[0].measure_number_map(nra_untied["onset_div"])
     return gttm_style_to_id_dependency_ts(gttm_ts, m_map, nra_untied, na)

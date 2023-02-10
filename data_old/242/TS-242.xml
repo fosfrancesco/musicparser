@@ -1,0 +1,887 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tstree>
+  <ts timespan="14.25" leftend="0.0" rightend="14.25">
+    <head>
+      <chord duration="1.5" velocity="90">
+        <note id="P1-9-1" />
+      </chord>
+    </head>
+    <at>
+      <temp difference="0.0" stable="unknown">
+        <pred temp="-inf" />
+        <succ temp="+inf" />
+      </temp>
+    </at>
+    <primary>
+      <ts timespan="7.5" leftend="6.75" rightend="14.25">
+        <head>
+          <chord duration="1.5" velocity="90">
+            <note id="P1-9-1" />
+          </chord>
+        </head>
+        <at>
+          <temp difference="0.0" stable="unknown">
+            <pred temp="-inf" />
+            <succ temp="+inf" />
+          </temp>
+        </at>
+        <primary>
+          <ts timespan="4.5" leftend="9.75" rightend="14.25">
+            <head>
+              <chord duration="1.5" velocity="90">
+                <note id="P1-9-1" />
+              </chord>
+            </head>
+            <at>
+              <temp difference="0.0" stable="unknown">
+                <pred temp="-inf" />
+                <succ temp="+inf" />
+              </temp>
+            </at>
+            <primary>
+              <ts timespan="3.0" leftend="11.25" rightend="14.25">
+                <head>
+                  <chord duration="1.5" velocity="90">
+                    <note id="P1-9-1" />
+                  </chord>
+                </head>
+                <at>
+                  <temp difference="0.0" stable="unknown">
+                    <pred temp="-inf" />
+                    <succ temp="+inf" />
+                  </temp>
+                </at>
+                <primary>
+                  <ts timespan="1.5" leftend="12.75" rightend="14.25">
+                    <head>
+                      <chord duration="1.5" velocity="90">
+                        <note id="P1-9-1" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="0.0" stable="unknown">
+                        <pred temp="-inf" />
+                        <succ temp="+inf" />
+                      </temp>
+                    </at>
+                  </ts>
+                </primary>
+                <secondary>
+                  <ts timespan="1.5" leftend="11.25" rightend="12.75">
+                    <head>
+                      <chord duration="0.25" velocity="90">
+                        <note id="P1-8-4" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="0.25" stable="0">
+                        <pred temp="-inf" />
+                        <succ temp="0" />
+                      </temp>
+                    </at>
+                    <primary>
+                      <ts timespan="0.5" leftend="12.25" rightend="12.75">
+                        <head>
+                          <chord duration="0.25" velocity="90">
+                            <note id="P1-8-4" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="0.25" stable="0">
+                            <pred temp="-inf" />
+                            <succ temp="0" />
+                          </temp>
+                        </at>
+                        <primary>
+                          <ts timespan="0.25" leftend="12.5" rightend="12.75">
+                            <head>
+                              <chord duration="0.25" velocity="90">
+                                <note id="P1-8-4" />
+                              </chord>
+                            </head>
+                            <at>
+                              <temp difference="0.25" stable="0">
+                                <pred temp="-inf" />
+                                <succ temp="0" />
+                              </temp>
+                            </at>
+                          </ts>
+                        </primary>
+                        <secondary>
+                          <ts timespan="0.25" leftend="12.25" rightend="12.5">
+                            <head>
+                              <chord duration="0.25" velocity="90">
+                                <note id="P1-8-3" />
+                              </chord>
+                            </head>
+                            <at>
+                              <temp difference="0.25" stable="./..">
+                                <pred temp="-inf" />
+                                <succ temp="./.." />
+                              </temp>
+                            </at>
+                          </ts>
+                        </secondary>
+                      </ts>
+                    </primary>
+                    <secondary>
+                      <ts timespan="1.0" leftend="11.25" rightend="12.25">
+                        <head>
+                          <chord duration="0.5" velocity="90">
+                            <note id="P1-8-1" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="1.25" stable="./..">
+                            <pred temp="-inf" />
+                            <succ temp="./.." />
+                          </temp>
+                        </at>
+                        <primary>
+                          <ts timespan="0.5" leftend="11.25" rightend="11.75">
+                            <head>
+                              <chord duration="0.5" velocity="90">
+                                <note id="P1-8-1" />
+                              </chord>
+                            </head>
+                            <at>
+                              <temp difference="1.25" stable="./../..">
+                                <pred temp="-inf" />
+                                <succ temp="./../.." />
+                              </temp>
+                            </at>
+                          </ts>
+                        </primary>
+                        <secondary>
+                          <ts timespan="0.5" leftend="11.75" rightend="12.25">
+                            <head>
+                              <chord duration="0.5" velocity="90">
+                                <note id="P1-8-2" />
+                              </chord>
+                            </head>
+                            <at>
+                              <temp difference="0.5" stable="./..">
+                                <pred temp="./.." />
+                                <succ temp="+inf" />
+                              </temp>
+                            </at>
+                          </ts>
+                        </secondary>
+                      </ts>
+                    </secondary>
+                  </ts>
+                </secondary>
+              </ts>
+            </primary>
+            <secondary>
+              <ts timespan="1.5" leftend="9.75" rightend="11.25">
+                <head>
+                  <chord duration="0.5" velocity="90">
+                    <note id="P1-7-1" />
+                  </chord>
+                </head>
+                <at>
+                  <temp difference="3.0" stable="0">
+                    <pred temp="-inf" />
+                    <succ temp="0" />
+                  </temp>
+                </at>
+                <primary>
+                  <ts timespan="1.0" leftend="9.75" rightend="10.75">
+                    <head>
+                      <chord duration="0.5" velocity="90">
+                        <note id="P1-7-1" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="3.0" stable="0">
+                        <pred temp="-inf" />
+                        <succ temp="0" />
+                      </temp>
+                    </at>
+                    <primary>
+                      <ts timespan="0.5" leftend="9.75" rightend="10.25">
+                        <head>
+                          <chord duration="0.5" velocity="90">
+                            <note id="P1-7-1" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="3.0" stable="0">
+                            <pred temp="-inf" />
+                            <succ temp="0" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </primary>
+                    <secondary>
+                      <ts timespan="0.5" leftend="10.25" rightend="10.75">
+                        <head>
+                          <chord duration="0.5" velocity="90">
+                            <note id="P1-7-2" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="0.5" stable="./..">
+                            <pred temp="./.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </secondary>
+                  </ts>
+                </primary>
+                <secondary>
+                  <ts timespan="0.5" leftend="10.75" rightend="11.25">
+                    <head>
+                      <chord duration="0.25" velocity="90">
+                        <note id="P1-7-3" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="1.0" stable="./..">
+                        <pred temp="./.." />
+                        <succ temp="+inf" />
+                      </temp>
+                    </at>
+                    <primary>
+                      <ts timespan="0.25" leftend="10.75" rightend="11.0">
+                        <head>
+                          <chord duration="0.25" velocity="90">
+                            <note id="P1-7-3" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="1.0" stable="./../..">
+                            <pred temp="./../.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </primary>
+                    <secondary>
+                      <ts timespan="0.25" leftend="11.0" rightend="11.25">
+                        <head>
+                          <chord duration="0.25" velocity="90">
+                            <note id="P1-7-4" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="0.25" stable="./..">
+                            <pred temp="./.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </secondary>
+                  </ts>
+                </secondary>
+              </ts>
+            </secondary>
+          </ts>
+        </primary>
+        <secondary>
+          <ts timespan="3.0" leftend="6.75" rightend="9.75">
+            <head>
+              <chord duration="1.0" velocity="90">
+                <note id="P1-5-1" />
+              </chord>
+            </head>
+            <at>
+              <temp difference="6.0" stable="0">
+                <pred temp="-inf" />
+                <succ temp="0" />
+              </temp>
+            </at>
+            <primary>
+              <ts timespan="1.5" leftend="6.75" rightend="8.25">
+                <head>
+                  <chord duration="1.0" velocity="90">
+                    <note id="P1-5-1" />
+                  </chord>
+                </head>
+                <at>
+                  <temp difference="6.0" stable="0">
+                    <pred temp="-inf" />
+                    <succ temp="0" />
+                  </temp>
+                </at>
+                <primary>
+                  <ts timespan="1.0" leftend="6.75" rightend="7.75">
+                    <head>
+                      <chord duration="1.0" velocity="90">
+                        <note id="P1-5-1" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="6.0" stable="0">
+                        <pred temp="-inf" />
+                        <succ temp="0" />
+                      </temp>
+                    </at>
+                  </ts>
+                </primary>
+                <secondary>
+                  <ts timespan="0.5" leftend="7.75" rightend="8.25">
+                    <head>
+                      <chord duration="0.25" velocity="90">
+                        <note id="P1-5-2" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="1.0" stable="./..">
+                        <pred temp="./.." />
+                        <succ temp="+inf" />
+                      </temp>
+                    </at>
+                    <primary>
+                      <ts timespan="0.25" leftend="7.75" rightend="8.0">
+                        <head>
+                          <chord duration="0.25" velocity="90">
+                            <note id="P1-5-2" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="1.0" stable="./../..">
+                            <pred temp="./../.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </primary>
+                    <secondary>
+                      <ts timespan="0.25" leftend="8.0" rightend="8.25">
+                        <head>
+                          <chord duration="0.25" velocity="90">
+                            <note id="P1-5-3" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="0.25" stable="./..">
+                            <pred temp="./.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </secondary>
+                  </ts>
+                </secondary>
+              </ts>
+            </primary>
+            <secondary>
+              <ts timespan="1.5" leftend="8.25" rightend="9.75">
+                <head>
+                  <chord duration="0.5" velocity="90">
+                    <note id="P1-6-1" />
+                  </chord>
+                </head>
+                <at>
+                  <temp difference="1.5" stable="./..">
+                    <pred temp="./.." />
+                    <succ temp="+inf" />
+                  </temp>
+                </at>
+                <primary>
+                  <ts timespan="0.5" leftend="8.25" rightend="8.75">
+                    <head>
+                      <chord duration="0.5" velocity="90">
+                        <note id="P1-6-1" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="1.5" stable="./../..">
+                        <pred temp="./../.." />
+                        <succ temp="+inf" />
+                      </temp>
+                    </at>
+                  </ts>
+                </primary>
+                <secondary>
+                  <ts timespan="1.0" leftend="8.75" rightend="9.75">
+                    <head>
+                      <chord duration="0.5" velocity="90">
+                        <note id="P1-6-3" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="1.0" stable="./..">
+                        <pred temp="./.." />
+                        <succ temp="+inf" />
+                      </temp>
+                    </at>
+                    <primary>
+                      <ts timespan="0.5" leftend="9.25" rightend="9.75">
+                        <head>
+                          <chord duration="0.5" velocity="90">
+                            <note id="P1-6-3" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="1.0" stable="./../..">
+                            <pred temp="./../.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </primary>
+                    <secondary>
+                      <ts timespan="0.5" leftend="8.75" rightend="9.25">
+                        <head>
+                          <chord duration="0.5" velocity="90">
+                            <note id="P1-6-2" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="0.5" stable="./..">
+                            <pred temp="-inf" />
+                            <succ temp="./.." />
+                          </temp>
+                        </at>
+                      </ts>
+                    </secondary>
+                  </ts>
+                </secondary>
+              </ts>
+            </secondary>
+          </ts>
+        </secondary>
+      </ts>
+    </primary>
+    <secondary>
+      <ts timespan="6.75" leftend="0.0" rightend="6.75">
+        <head>
+          <chord duration="1.0" velocity="90">
+            <note id="P1-1-1" />
+          </chord>
+        </head>
+        <at>
+          <temp difference="12.0" stable="0">
+            <pred temp="-inf" />
+            <succ temp="0" />
+          </temp>
+        </at>
+        <primary>
+          <ts timespan="3.75" leftend="0.0" rightend="3.75">
+            <head>
+              <chord duration="1.0" velocity="90">
+                <note id="P1-1-1" />
+              </chord>
+            </head>
+            <at>
+              <temp difference="12.0" stable="0">
+                <pred temp="-inf" />
+                <succ temp="0" />
+              </temp>
+            </at>
+            <primary>
+              <ts timespan="2.25" leftend="0.0" rightend="2.25">
+                <head>
+                  <chord duration="1.0" velocity="90">
+                    <note id="P1-1-1" />
+                  </chord>
+                </head>
+                <at>
+                  <temp difference="12.0" stable="0">
+                    <pred temp="-inf" />
+                    <succ temp="0" />
+                  </temp>
+                </at>
+                <primary>
+                  <ts timespan="1.5" leftend="0.75" rightend="2.25">
+                    <head>
+                      <chord duration="1.0" velocity="90">
+                        <note id="P1-1-1" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="12.0" stable="0">
+                        <pred temp="-inf" />
+                        <succ temp="0" />
+                      </temp>
+                    </at>
+                    <primary>
+                      <ts timespan="1.0" leftend="0.75" rightend="1.75">
+                        <head>
+                          <chord duration="1.0" velocity="90">
+                            <note id="P1-1-1" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="12.0" stable="0">
+                            <pred temp="-inf" />
+                            <succ temp="0" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </primary>
+                    <secondary>
+                      <ts timespan="0.5" leftend="1.75" rightend="2.25">
+                        <head>
+                          <chord duration="0.25" velocity="90">
+                            <note id="P1-1-2" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="1.0" stable="./..">
+                            <pred temp="./.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                        <primary>
+                          <ts timespan="0.25" leftend="1.75" rightend="2.0">
+                            <head>
+                              <chord duration="0.25" velocity="90">
+                                <note id="P1-1-2" />
+                              </chord>
+                            </head>
+                            <at>
+                              <temp difference="1.0" stable="./../..">
+                                <pred temp="./../.." />
+                                <succ temp="+inf" />
+                              </temp>
+                            </at>
+                          </ts>
+                        </primary>
+                        <secondary>
+                          <ts timespan="0.25" leftend="2.0" rightend="2.25">
+                            <head>
+                              <chord duration="0.25" velocity="90">
+                                <note id="P1-1-3" />
+                              </chord>
+                            </head>
+                            <at>
+                              <temp difference="0.25" stable="./..">
+                                <pred temp="./.." />
+                                <succ temp="+inf" />
+                              </temp>
+                            </at>
+                          </ts>
+                        </secondary>
+                      </ts>
+                    </secondary>
+                  </ts>
+                </primary>
+                <secondary>
+                  <ts timespan="0.75" leftend="0.0" rightend="0.75">
+                    <head>
+                      <chord duration="0.25" velocity="90">
+                        <note id="P1-0-1" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="0.75" stable="./..">
+                        <pred temp="-inf" />
+                        <succ temp="./.." />
+                      </temp>
+                    </at>
+                    <primary>
+                      <ts timespan="0.5" leftend="0.0" rightend="0.5">
+                        <head>
+                          <chord duration="0.25" velocity="90">
+                            <note id="P1-0-1" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="0.75" stable="./../..">
+                            <pred temp="-inf" />
+                            <succ temp="./../.." />
+                          </temp>
+                        </at>
+                        <primary>
+                          <ts timespan="0.25" leftend="0.0" rightend="0.25">
+                            <head>
+                              <chord duration="0.25" velocity="90">
+                                <note id="P1-0-1" />
+                              </chord>
+                            </head>
+                            <at>
+                              <temp difference="0.75" stable="./../../..">
+                                <pred temp="-inf" />
+                                <succ temp="./../../.." />
+                              </temp>
+                            </at>
+                          </ts>
+                        </primary>
+                        <secondary>
+                          <ts timespan="0.25" leftend="0.25" rightend="0.5">
+                            <head>
+                              <chord duration="0.25" velocity="90">
+                                <note id="P1-0-2" />
+                              </chord>
+                            </head>
+                            <at>
+                              <temp difference="0.25" stable="./..">
+                                <pred temp="./.." />
+                                <succ temp="+inf" />
+                              </temp>
+                            </at>
+                          </ts>
+                        </secondary>
+                      </ts>
+                    </primary>
+                    <secondary>
+                      <ts timespan="0.25" leftend="0.5" rightend="0.75">
+                        <head>
+                          <chord duration="0.25" velocity="90">
+                            <note id="P1-0-3" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="0.5" stable="./..">
+                            <pred temp="./.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </secondary>
+                  </ts>
+                </secondary>
+              </ts>
+            </primary>
+            <secondary>
+              <ts timespan="1.5" leftend="2.25" rightend="3.75">
+                <head>
+                  <chord duration="0.5" velocity="90">
+                    <note id="P1-2-1" />
+                  </chord>
+                </head>
+                <at>
+                  <temp difference="1.5" stable="./..">
+                    <pred temp="./.." />
+                    <succ temp="+inf" />
+                  </temp>
+                </at>
+                <primary>
+                  <ts timespan="0.5" leftend="2.25" rightend="2.75">
+                    <head>
+                      <chord duration="0.5" velocity="90">
+                        <note id="P1-2-1" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="1.5" stable="./../..">
+                        <pred temp="./../.." />
+                        <succ temp="+inf" />
+                      </temp>
+                    </at>
+                  </ts>
+                </primary>
+                <secondary>
+                  <ts timespan="1.0" leftend="2.75" rightend="3.75">
+                    <head>
+                      <chord duration="0.5" velocity="90">
+                        <note id="P1-2-3" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="1.0" stable="./..">
+                        <pred temp="./.." />
+                        <succ temp="+inf" />
+                      </temp>
+                    </at>
+                    <primary>
+                      <ts timespan="0.5" leftend="3.25" rightend="3.75">
+                        <head>
+                          <chord duration="0.5" velocity="90">
+                            <note id="P1-2-3" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="1.0" stable="./../..">
+                            <pred temp="./../.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </primary>
+                    <secondary>
+                      <ts timespan="0.5" leftend="2.75" rightend="3.25">
+                        <head>
+                          <chord duration="0.5" velocity="90">
+                            <note id="P1-2-2" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="0.5" stable="./..">
+                            <pred temp="-inf" />
+                            <succ temp="./.." />
+                          </temp>
+                        </at>
+                      </ts>
+                    </secondary>
+                  </ts>
+                </secondary>
+              </ts>
+            </secondary>
+          </ts>
+        </primary>
+        <secondary>
+          <ts timespan="3.0" leftend="3.75" rightend="6.75">
+            <head>
+              <chord duration="1.0" velocity="90">
+                <note id="P1-3-1" />
+              </chord>
+            </head>
+            <at>
+              <temp difference="3.0" stable="./..">
+                <pred temp="./.." />
+                <succ temp="+inf" />
+              </temp>
+            </at>
+            <primary>
+              <ts timespan="1.5" leftend="3.75" rightend="5.25">
+                <head>
+                  <chord duration="1.0" velocity="90">
+                    <note id="P1-3-1" />
+                  </chord>
+                </head>
+                <at>
+                  <temp difference="3.0" stable="./../..">
+                    <pred temp="./../.." />
+                    <succ temp="+inf" />
+                  </temp>
+                </at>
+                <primary>
+                  <ts timespan="1.0" leftend="3.75" rightend="4.75">
+                    <head>
+                      <chord duration="1.0" velocity="90">
+                        <note id="P1-3-1" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="3.0" stable="./../../..">
+                        <pred temp="./../../.." />
+                        <succ temp="+inf" />
+                      </temp>
+                    </at>
+                  </ts>
+                </primary>
+                <secondary>
+                  <ts timespan="0.5" leftend="4.75" rightend="5.25">
+                    <head>
+                      <chord duration="0.25" velocity="90">
+                        <note id="P1-3-2" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="1.0" stable="./..">
+                        <pred temp="./.." />
+                        <succ temp="+inf" />
+                      </temp>
+                    </at>
+                    <primary>
+                      <ts timespan="0.25" leftend="4.75" rightend="5.0">
+                        <head>
+                          <chord duration="0.25" velocity="90">
+                            <note id="P1-3-2" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="1.0" stable="./../..">
+                            <pred temp="./../.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </primary>
+                    <secondary>
+                      <ts timespan="0.25" leftend="5.0" rightend="5.25">
+                        <head>
+                          <chord duration="0.25" velocity="90">
+                            <note id="P1-3-3" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="0.25" stable="./..">
+                            <pred temp="./.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </secondary>
+                  </ts>
+                </secondary>
+              </ts>
+            </primary>
+            <secondary>
+              <ts timespan="1.5" leftend="5.25" rightend="6.75">
+                <head>
+                  <chord duration="0.5" velocity="90">
+                    <note id="P1-4-1" />
+                  </chord>
+                </head>
+                <at>
+                  <temp difference="1.5" stable="./..">
+                    <pred temp="./.." />
+                    <succ temp="+inf" />
+                  </temp>
+                </at>
+                <primary>
+                  <ts timespan="0.5" leftend="5.25" rightend="5.75">
+                    <head>
+                      <chord duration="0.5" velocity="90">
+                        <note id="P1-4-1" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="1.5" stable="./../..">
+                        <pred temp="./../.." />
+                        <succ temp="+inf" />
+                      </temp>
+                    </at>
+                  </ts>
+                </primary>
+                <secondary>
+                  <ts timespan="1.0" leftend="5.75" rightend="6.75">
+                    <head>
+                      <chord duration="0.5" velocity="90">
+                        <note id="P1-4-3" />
+                      </chord>
+                    </head>
+                    <at>
+                      <temp difference="1.0" stable="./..">
+                        <pred temp="./.." />
+                        <succ temp="+inf" />
+                      </temp>
+                    </at>
+                    <primary>
+                      <ts timespan="0.5" leftend="6.25" rightend="6.75">
+                        <head>
+                          <chord duration="0.5" velocity="90">
+                            <note id="P1-4-3" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="1.0" stable="./../..">
+                            <pred temp="./../.." />
+                            <succ temp="+inf" />
+                          </temp>
+                        </at>
+                      </ts>
+                    </primary>
+                    <secondary>
+                      <ts timespan="0.5" leftend="5.75" rightend="6.25">
+                        <head>
+                          <chord duration="0.5" velocity="90">
+                            <note id="P1-4-2" />
+                          </chord>
+                        </head>
+                        <at>
+                          <temp difference="0.5" stable="./..">
+                            <pred temp="-inf" />
+                            <succ temp="./.." />
+                          </temp>
+                        </at>
+                      </ts>
+                    </secondary>
+                  </ts>
+                </secondary>
+              </ts>
+            </secondary>
+          </ts>
+        </secondary>
+      </ts>
+    </secondary>
+  </ts>
+</tstree>
+
