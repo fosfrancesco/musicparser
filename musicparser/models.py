@@ -152,6 +152,7 @@ class ArcPredictionLightModel(LightningModule):
             activation=activation,
             dropout=dropout,
         ).double()
+        pos_weight = 1 if pos_weight is None else pos_weight
         self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
         self.val_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
 

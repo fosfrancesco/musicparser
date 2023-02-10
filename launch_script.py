@@ -19,8 +19,8 @@ patience = 10
 devices = [0]
 
 datamodule = TSDataModule(batch_size=1, num_workers=num_workers)
-datamodule.setup()
-model = ArcPredictionLightModel(datamodule)
+# datamodule.setup()
+model = ArcPredictionLightModel(20, n_hidden,)
 
 if wandb_log:
     # name = f"{n_layer}-{n_hidden}-{jk_mode}-{pot_edges_dist}-{linear_assignment}-{conv_type}-d{dropout}"
@@ -34,7 +34,7 @@ else:
 checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_fscore", mode="max")
 early_stop_callback = EarlyStopping(monitor="val_fscore", min_delta=0.00, patience=patience, verbose=True, mode="max")
 trainer = Trainer(
-    max_epochs=100, accelerator="gpu", devices= devices, #strategy="ddp",
+    max_epochs=100, accelerator="auto", #devices= devices, #strategy="ddp",
     num_sanity_val_steps=1,
     logger=wandb_logger,
     callbacks=[checkpoint_callback, early_stop_callback],

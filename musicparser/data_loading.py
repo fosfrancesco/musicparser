@@ -77,10 +77,10 @@ class TSDataset(Dataset):
                 print(f"!!!!! Error with {title}", e)
 
     def __len__(self):
-        return len(self.note_features)
+        return len(self.truth_masks)
 
     def __getitem__(self, idx):
-        return [self.note_features[i], self.dep_arcs[i], self.truth_masks[i], self.pot_arcs[i] for i in idx]
+        return [(self.note_features[i], self.dep_arcs[i], self.truth_masks[i], self.pot_arcs[i]) for i in idx]
 
 def get_edges_mask(subset_edges, total_edges, transpose=False, check_strict_subset=True):
     """Get a mask of edges to use for training.
