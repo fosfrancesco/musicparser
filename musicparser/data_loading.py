@@ -23,7 +23,7 @@ class TSDataModule(LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        idxs = range(len(self.dataset)).long()
+        idxs = range(len(self.dataset))
         trainval_idx, test_idx = train_test_split(idxs, test_size=0.3, random_state=0)
         train_idx, val_idx = train_test_split(trainval_idx, test_size=0.1, random_state=0)
 
@@ -31,7 +31,6 @@ class TSDataModule(LightningDataModule):
         self.dataset_val = self.dataset[val_idx]
         self.dataset_test = self.dataset[test_idx]
         # self.dataset_predict = self.dataset[test_idx[:5]]
-        print(f"Running evaluation on collection {self.test_collection}")
         print(f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}")
             
     def train_dataloader(self):
@@ -59,6 +58,7 @@ class TSDataset(Dataset):
         self.note_features = []
         self.dep_arcs = []
         self.truth_masks = []
+        self.pot_arcs = []
         for title, score_file, ts_xml_file in self.data_df.values:
             try:
                 n_feat, d_arc = get_note_features_and_dep_arcs(score_file, ts_xml_file)
@@ -66,16 +66,21 @@ class TSDataset(Dataset):
                 d_arc = torch.tensor(d_arc)
                 self.note_features.append(n_feat)
                 self.dep_arcs.append(d_arc)
-                all_arcs = torch.cartesian_prod(torch.arange(len(n_feat)),torch.arange(len(n_feat)))
-                self.truth_masks.append(get_edges_mask(d_arc, all_arcs))
+                # compute potential arcs, i.e., all arcs minus self loops
+                indices = torch.arange(len(n_feat))
+                cart_prod = torch.cartesian_prod(indices,indices)
+                pot_arcs = cart_prod[cart_prod[:,0]!=cart_prod[:,1]]
+                self.pot_arcs.append(pot_arcs)
+                # compute the ground truth mask over the pot arcs
+                self.truth_masks.append(get_edges_mask(d_arc, pot_arcs))
             except Exception as e:
                 print(f"!!!!! Error with {title}", e)
 
     def __len__(self):
-        return len(self.score_files)
+        return len(self.note_features)
 
     def __getitem__(self, idx):
-        return self.note_features[idx], self.dep_arcs[idx], self.truth_masks[idx]
+        return [self.note_features[i], self.dep_arcs[i], self.truth_masks[i], self.pot_arcs[i] for i in idx]
 
 def get_edges_mask(subset_edges, total_edges, transpose=False, check_strict_subset=True):
     """Get a mask of edges to use for training.
@@ -252,13 +257,37 @@ def correct_metrical_information(na):
     return na, real_ts, real_measure_duration
 
 
+def get_pc_one_hot(note_array):
+    one_hot = np.zeros((len(note_array), 12))
+    idx = (np.arange(len(note_array)),np.remainder(note_array["pitch"], 12))
+    one_hot[idx] = 1
+    return one_hot
+
+def get_full_pitch_one_hot(note_array, piano_range = True):
+    one_hot = np.zeros((len(note_array), 127))
+    idx = (np.arange(len(note_array)),note_array["pitch"])
+    one_hot[idx] = 1
+    if piano_range:
+        one_hot = one_hot[:, 21:109]
+    return one_hot
+
+def get_octave_one_hot(note_array):
+    one_hot = np.zeros((len(note_array), 10))
+    idx = (np.arange(len(note_array)), np.floor_divide(note_array["pitch"], 12))
+    one_hot[idx] = 1
+    return one_hot
+
+
 def get_features_from_na(na):
     """Extracts the features from the note array. It must contains the metrical information."""
-    pitch = na["pitch"]
-    metrical = na["is_downbeat"]  # TODO: add more metrical info
     duration = na["duration_div"] / na["tot_measure_div"]
     # TODO: consider rests as lag from previous note
-    return np.vstack((pitch, metrical, duration)).T
+    octave_oh = get_octave_one_hot(na)
+    pc_oh = get_pc_one_hot(na)
+    duration_feature = np.expand_dims(1- np.tanh(duration), 1)
+    metrical = np.expand_dims(na["is_downbeat"],1)  # TODO: add more metrical info
+    out = np.hstack((duration_feature, pc_oh, octave_oh,metrical))
+    return out
 
 
 def gttm_id_to_pt_id(gttm_id, measure_mapping, nra_untied):
