@@ -32,6 +32,8 @@ class TSDataModule(LightningDataModule):
         self.dataset_test = self.dataset[test_idx]
         # self.dataset_predict = self.dataset[test_idx[:5]]
         print(f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}")
+        # compute the positive weight to be used to balance the loss
+        self.positive_weight = self.dataset.get_positive_weight()
             
     def train_dataloader(self):
         return DataLoader(self.dataset_train, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True)
@@ -64,15 +66,17 @@ class TSDataset(Dataset):
                 n_feat, d_arc = get_note_features_and_dep_arcs(score_file, ts_xml_file)
                 nfeat = torch.tensor(n_feat)
                 d_arc = torch.tensor(d_arc)
-                self.note_features.append(n_feat)
-                self.dep_arcs.append(d_arc)
                 # compute potential arcs, i.e., all arcs minus self loops
                 indices = torch.arange(len(n_feat))
                 cart_prod = torch.cartesian_prod(indices,indices)
                 pot_arcs = cart_prod[cart_prod[:,0]!=cart_prod[:,1]]
-                self.pot_arcs.append(pot_arcs)
                 # compute the ground truth mask over the pot arcs
-                self.truth_masks.append(get_edges_mask(d_arc, pot_arcs))
+                truth_mask = get_edges_mask(d_arc, pot_arcs)
+                # add everything to the dataset
+                self.note_features.append(n_feat)
+                self.dep_arcs.append(d_arc)
+                self.pot_arcs.append(pot_arcs)
+                self.truth_masks.append(truth_mask)
             except Exception as e:
                 print(f"!!!!! Error with {title}", e)
 
@@ -80,7 +84,12 @@ class TSDataset(Dataset):
         return len(self.truth_masks)
 
     def __getitem__(self, idx):
-        return [(self.note_features[i], self.dep_arcs[i], self.truth_masks[i], self.pot_arcs[i]) for i in idx]
+        # return [(self.note_features[i], self.dep_arcs[i], self.truth_masks[i], self.pot_arcs[i]) for i in idx]
+        return [(self.note_features[i], self.truth_masks[i], self.pot_arcs[i]) for i in idx]
+
+    def get_positive_weight(self):
+        return sum([len(truth_mask)/torch.sum(truth_mask) for truth_mask in self.truth_masks])/len(self.truth_masks)
+
 
 def get_edges_mask(subset_edges, total_edges, transpose=False, check_strict_subset=True):
     """Get a mask of edges to use for training.
@@ -162,10 +171,13 @@ def ts_xml_to_dependency_tree(xml_file):
 
 def gttm_style_to_id_dependency_ts(gttm_ts_dependency, measure_mapping, nra_untied, na):
     """Converts a dependency tree from gttm-style ids to ids in the noteaarray.
+    We need both the an array of untied notes and rests (what gttm notation reference to) and the notearray (what we will use) to convert the ids.
 
     Args:
-        ts (list): a list of dependencies, each dependency is a tuple of the form (source, destination) with gttm-style ids
-
+        gttm_ts_dependency (list): a list of dependencies, each dependency is a tuple of the form (source, destination) with gttm-style ids
+        measure_mapping (list): a list of measures for each note in the nra_untied
+        nra_untied (np.array): a structured array of untied notes and rests
+        na (np.array): a structured array of (tied) notes
     Returns:
         list: a list of dependencies, each dependency is a tuple of the form (source, destination) with ids in the notearray
     """
@@ -323,6 +335,7 @@ def note_id_to_note_array_index(id, na):
     if len(potential_indices) == 1:
         return np.where(na["id"] == id)[0][0]
     elif id=="r1": # there is a common problem with pickup measures and number of rests
+        print("Warning: rest id r1 not found. Returning 0")
         return 0
     else:
         raise Exception("Problem with note id: ", id)

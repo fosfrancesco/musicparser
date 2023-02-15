@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 import torch_geometric as pyg
-
+from torchmetrics.classification import BinaryF1Score, BinaryAccuracy
 
 class RNNEncoder(torch.nn.Module):
     def __init__(
@@ -155,9 +155,11 @@ class ArcPredictionLightModel(LightningModule):
         pos_weight = 1 if pos_weight is None else pos_weight
         self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
         self.val_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
+        self.val_f1score = BinaryF1Score()
 
     def training_step(self, batch, batch_idx):
-        note_seq, truth_arcs,  truth_arcs_mask, pot_arcs = batch[0]
+        note_seq, truth_arcs_mask, pot_arcs = batch
+        note_seq, truth_arcs_mask, pot_arcs = note_seq[0], truth_arcs_mask[0], pot_arcs[0]
         num_notes = len(note_seq)
         arc_pred_mask_logits = self.module(note_seq, pot_arcs)
         loss = self.train_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float())
@@ -169,20 +171,21 @@ class ArcPredictionLightModel(LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        note_seq, truth_arcs,  truth_arcs_mask, pot_arcs = batch[0]
+        note_seq, truth_arcs_mask, pot_arcs = batch
+        note_seq, truth_arcs_mask, pot_arcs = note_seq[0], truth_arcs_mask[0], pot_arcs[0]
         num_notes = len(note_seq)
-        arc_pred_mask_logits = self.module(note_seq)
+        arc_pred_mask_logits = self.module(note_seq, pot_arcs)
         arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
-        pred_arc = pot_arcs[:, torch.round(arc_pred__mask_normalized).squeeze().bool()]
+        pred_arc = pot_arcs[torch.round(arc_pred__mask_normalized).squeeze().bool()]
         # compute pred and ground truth adj matrices
         if torch.sum(pred_arc) > 0:
             adj_pred = pyg.utils.to_dense_adj(pred_arc, max_num_nodes=num_notes).squeeze().cpu()
         else: # to avoid exception in to_dense_adj when there is no predicted edge
             adj_pred = torch.zeros((num_notes, num_notes)).squeeze().to(self.device).cpu()
         # compute loss and F1 score
-        adj_target = pyg.utils.to_dense_adj(truth_arcs, max_num_nodes=num_notes).squeeze().long().cpu()
+        adj_target = pyg.utils.to_dense_adj(pot_arcs[truth_arcs_mask], max_num_nodes=num_notes).squeeze().long().cpu()
         loss = self.val_loss(adj_pred.float(), adj_target.float())
-        val_fscore = self.val_f1_score.cpu()(adj_pred.flatten(), adj_target.flatten())
+        val_fscore = self.val_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
         self.log("val_loss", loss.item(), batch_size=1)
         self.log("val_fscore", val_fscore.item(), prog_bar=True, batch_size=1)
 
