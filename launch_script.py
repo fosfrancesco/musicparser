@@ -2,6 +2,8 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning import Trainer
+import warnings
+warnings.filterwarnings('ignore') # setting ignore as a parameter
 
 from musicparser.data_loading import TSDataModule
 from musicparser.models import ArcPredictionModel, ArcPredictionLightModel

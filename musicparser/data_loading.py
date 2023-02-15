@@ -334,9 +334,9 @@ def note_id_to_note_array_index(id, na):
     potential_indices = np.where(na["id"] == id)[0]
     if len(potential_indices) == 1:
         return np.where(na["id"] == id)[0][0]
-    elif id=="r1": # there is a common problem with pickup measures and number of rests
-        print("Warning: rest id r1 not found. Returning 0")
-        return 0
+    # elif id=="r1": # there is a common problem with pickup measures and number of rests
+    #     print("Warning: rest id r1 not found. Returning 0")
+    #     return 0
     else:
         raise Exception("Problem with note id: ", id)
         # print("Problem with note id: ", id)
@@ -361,11 +361,21 @@ def get_dependency_arcs(ts_xml_file, score):
     # nra_untied = nra_untied[~combined_mask]
     # get the gttm-style dependency tree
     m_map = score.parts[0].measure_number_map(nra_untied["onset_div"])
-    return gttm_style_to_id_dependency_ts(gttm_ts, m_map, nra_untied, na)
+    try:
+        return gttm_style_to_id_dependency_ts(gttm_ts, m_map, nra_untied, na), gttm_ts
+    except: # there is a common error in pickup measures where the first rest is not counted
+        print("Trying to solve first measure error in: ", ts_xml_file)
+        try:
+            return  gttm_style_to_id_dependency_ts(gttm_ts, m_map[1:], nra_untied[1:], na), gttm_ts
+        except:
+            try:
+                return  gttm_style_to_id_dependency_ts(gttm_ts, m_map[2:], nra_untied[2:], na), gttm_ts
+            except:
+                raise ValueError("Can't assign ids in: ", ts_xml_file)
 
 def get_note_features_and_dep_arcs(score_file, ts_xml_file):
     score = pt.load_musicxml(score_file, force_note_ids=True)
     # get the note array
     note_features = get_note_features(score)
-    dep_arcs = get_dependency_arcs(ts_xml_file, score)
+    dep_arcs, gttm_style_dep = get_dependency_arcs(ts_xml_file, score)
     return note_features, dep_arcs
