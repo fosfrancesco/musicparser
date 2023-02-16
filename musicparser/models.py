@@ -5,6 +5,29 @@ from pytorch_lightning import LightningModule
 import torch_geometric as pyg
 from torchmetrics.classification import BinaryF1Score, BinaryAccuracy
 
+class TransformerEncoder(torch.nn.Module):
+    def __init__(
+        self,
+        input_dim,
+        hidden_dim,
+        encoder_depth,
+        n_heads = 8,
+        dropout=None,
+        activation = "relu"
+    ):
+        super().__init__()
+
+        if dropout is None:
+            dropout = 0
+
+        encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, dim_feedforward=hidden_dim, nhead=n_heads, dropout =dropout, activation=activation)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=encoder_depth)
+
+    def forward(self, sentences, sentences_len=None):
+        z = self.self.transformer_encoder(sentences)
+        return z
+
+
 class RNNEncoder(torch.nn.Module):
     def __init__(
         self,
@@ -28,10 +51,8 @@ class RNNEncoder(torch.nn.Module):
         else:
             raise ValueError(f"Unknown RNN cell type: {cell_type}")
 
-        if dropout is not None:
-            self.dropout = dropout
-        else:
-            self.dropout = 0
+        if dropout is None:
+            dropout = 0
 
         # RNN layer.
         self.rnn = rnn_cell(
@@ -39,17 +60,17 @@ class RNNEncoder(torch.nn.Module):
             hidden_size=hidden_dim // 2 if bidirectional else hidden_dim,
             bidirectional=bidirectional,
             num_layers=rnn_depth,
-            dropout=self.dropout,
+            dropout=dropout,
         )
 
     def forward(self, sentences, sentences_len=None):
         # sentences = nn.utils.rnn.pack_padded_sequence(sentences, sentences_len)
-        rnn_out, _ = self.rnn(sentences)
+        z, _ = self.rnn(sentences)
         # rnn_out, _ = nn.utils.rnn.pad_packed_sequence(rnn_out)
 
         # if self.dropout is not None:
         #     rnn_out = self.dropout(rnn_out)
-        return rnn_out
+        return z
 
 
 # class GNNEncoder(torch.nn.Module):
@@ -122,7 +143,7 @@ class ArcDecoder(torch.nn.Module):
 class ArcPredictionModel(nn.Module):
 	def __init__(self, input_dim, hidden_dim, num_layers, activation=F.relu, dropout=0.2):
 		super().__init__()
-		self.encoder = RNNEncoder(input_dim, hidden_dim, num_layers)
+		self.encoder = RNNEncoder(input_dim, hidden_dim, num_layers, dropout=dropout)
 		self.decoder = ArcDecoder(hidden_dim, activation=activation)
 
 	def forward(self, note_features, pot_arcs):
@@ -156,13 +177,14 @@ class ArcPredictionLightModel(LightningModule):
         self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
         self.val_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
         self.val_f1score = BinaryF1Score()
+        self.val_f1score_postp = BinaryF1Score()
 
     def training_step(self, batch, batch_idx):
         note_seq, truth_arcs_mask, pot_arcs = batch
         note_seq, truth_arcs_mask, pot_arcs = note_seq[0], truth_arcs_mask[0], pot_arcs[0]
         num_notes = len(note_seq)
         arc_pred_mask_logits = self.module(note_seq, pot_arcs)
-        loss = self.train_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float())
+        loss = self.train_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float()).cpu()
         # get predicted class for the edges (e.g. 0 or 1)
         # arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
         # arc_pred_mask_bool = torch.round(arc_pred__mask_normalized).bool()
@@ -179,15 +201,22 @@ class ArcPredictionLightModel(LightningModule):
         pred_arc = pot_arcs[torch.round(arc_pred__mask_normalized).squeeze().bool()]
         # compute pred and ground truth adj matrices
         if torch.sum(pred_arc) > 0:
-            adj_pred = pyg.utils.to_dense_adj(pred_arc, max_num_nodes=num_notes).squeeze().cpu()
+            adj_pred = pyg.utils.to_dense_adj(pred_arc.T, max_num_nodes=num_notes).squeeze().cpu()
         else: # to avoid exception in to_dense_adj when there is no predicted edge
             adj_pred = torch.zeros((num_notes, num_notes)).squeeze().to(self.device).cpu()
         # compute loss and F1 score
-        adj_target = pyg.utils.to_dense_adj(pot_arcs[truth_arcs_mask], max_num_nodes=num_notes).squeeze().long().cpu()
-        loss = self.val_loss(adj_pred.float(), adj_target.float())
+        adj_target = pyg.utils.to_dense_adj(pot_arcs[truth_arcs_mask].T, max_num_nodes=num_notes).squeeze().long().cpu()
+        loss = self.val_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float())
         val_fscore = self.val_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
         self.log("val_loss", loss.item(), batch_size=1)
         self.log("val_fscore", val_fscore.item(), prog_bar=True, batch_size=1)
+        # postprocess the values
+        adj_pred_prob= torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).to_dense().cpu()
+        max_mask = adj_pred_prob.max(dim=0,keepdim=True)[0] == adj_pred_prob
+        adj_pred_postp = adj_pred_prob * max_mask
+        adj_pred_postp[adj_pred_postp!= 0 ] = 1
+        val_fscore_postp = self.val_f1score_postp.cpu()(adj_pred_postp.flatten(), adj_target.flatten())
+        self.log("val_fscore_postp", val_fscore_postp.item(), prog_bar=True, batch_size=1)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)

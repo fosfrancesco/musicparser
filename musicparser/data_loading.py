@@ -16,6 +16,7 @@ class TSDataModule(LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.dataset = TSDataset(Path("data"))
+        self.positive_weight = self.dataset.get_positive_weight()
         # self.features = self.dataset.features
         # self.test_collection = test_collection
 
@@ -33,7 +34,6 @@ class TSDataModule(LightningDataModule):
         # self.dataset_predict = self.dataset[test_idx[:5]]
         print(f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}")
         # compute the positive weight to be used to balance the loss
-        self.positive_weight = self.dataset.get_positive_weight()
             
     def train_dataloader(self):
         return DataLoader(self.dataset_train, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True)
@@ -61,6 +61,7 @@ class TSDataset(Dataset):
         self.dep_arcs = []
         self.truth_masks = []
         self.pot_arcs = []
+        print("Loading data...")
         for title, score_file, ts_xml_file in self.data_df.values:
             try:
                 n_feat, d_arc = get_note_features_and_dep_arcs(score_file, ts_xml_file)
