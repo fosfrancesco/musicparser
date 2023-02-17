@@ -141,14 +141,18 @@ class ArcDecoder(torch.nn.Module):
 
 
 class ArcPredictionModel(nn.Module):
-	def __init__(self, input_dim, hidden_dim, num_layers, activation=F.relu, dropout=0.2):
-		super().__init__()
-		self.encoder = RNNEncoder(input_dim, hidden_dim, num_layers, dropout=dropout)
-		self.decoder = ArcDecoder(hidden_dim, activation=activation)
+    def __init__(self, input_dim, hidden_dim, num_layers, activation="relu", dropout=0.2):
+        super().__init__()
+        if activation == "relu":
+            activation = F.relu
+        elif activation == "gelu":
+            activation = F.gelu
+        self.encoder = RNNEncoder(input_dim, hidden_dim, num_layers, dropout=dropout)
+        self.decoder = ArcDecoder(hidden_dim, activation=activation)
 
-	def forward(self, note_features, pot_arcs):
-		z = self.encoder(note_features)
-		return self.decoder(z, pot_arcs)
+    def forward(self, note_features, pot_arcs):
+        z = self.encoder(note_features)
+        return self.decoder(z, pot_arcs)
 
 class ArcPredictionLightModel(LightningModule):
     def __init__(
@@ -156,7 +160,7 @@ class ArcPredictionLightModel(LightningModule):
         in_feats,
         n_hidden,
         n_layers=2,
-        activation=F.relu,
+        activation="relu",
         dropout=0.3,
         lr=0.001,
         weight_decay=5e-4,
