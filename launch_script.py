@@ -46,7 +46,7 @@ def main():
         )
 
     trainer.fit(model, datamodule)
-    trainer.test(model, datamodule)
+    # trainer.test(model, datamodule)
 
 
 
