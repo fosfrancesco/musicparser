@@ -8,6 +8,10 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 import torch
 from sklearn.model_selection import train_test_split
+import torch.nn.functional as F
+
+MINIMUM_OCTAVE = 4
+MAXIMUM_OCTAVE = 8
 
 
 class TSDataModule(LightningDataModule):
@@ -64,13 +68,16 @@ class TSDataset(Dataset):
         print("Loading data...")
         for title, score_file, ts_xml_file in self.data_df.values:
             try:
-                n_feat, d_arc = get_note_features_and_dep_arcs(score_file, ts_xml_file)
+                n_feat, d_arc, gttm_style_feat = get_note_features_and_dep_arcs(score_file, ts_xml_file)
                 nfeat = torch.tensor(n_feat)
                 d_arc = torch.tensor(d_arc)
-                # compute potential arcs, i.e., all arcs minus self loops
+                # compute potential arcs, i.e., all arcs minus self loops and rests connections
                 indices = torch.arange(len(n_feat))
-                cart_prod = torch.cartesian_prod(indices,indices)
-                pot_arcs = cart_prod[cart_prod[:,0]!=cart_prod[:,1]]
+                cart_prod = torch.cartesian_prod(indices,indices) # all possible pairs
+                pot_arcs = cart_prod[cart_prod[:,0]!=cart_prod[:,1]] # remove self loops
+                starting_rest_mask = n_feat[pot_arcs[:,0]][:,0]
+                ending_rest_mask = n_feat[pot_arcs[:,1]][:,0]
+                pot_arcs = pot_arcs[~np.logical_or(starting_rest_mask, ending_rest_mask)]
                 # compute the ground truth mask over the pot arcs
                 truth_mask = get_edges_mask(d_arc, pot_arcs)
                 # add everything to the dataset
@@ -86,7 +93,7 @@ class TSDataset(Dataset):
 
     def __getitem__(self, idx):
         # return [(self.note_features[i], self.dep_arcs[i], self.truth_masks[i], self.pot_arcs[i]) for i in idx]
-        return [(self.note_features[i], self.truth_masks[i], self.pot_arcs[i]) for i in idx]
+        return [(data_preparation(self.note_features[i]), self.truth_masks[i], self.pot_arcs[i]) for i in idx]
 
     def get_positive_weight(self):
         return sum([len(truth_mask)/torch.sum(truth_mask) for truth_mask in self.truth_masks])/len(self.truth_masks)
@@ -170,7 +177,7 @@ def ts_xml_to_dependency_tree(xml_file):
     return _iterative_parse(root)[0]
 
 
-def gttm_style_to_id_dependency_ts(gttm_ts_dependency, measure_mapping, nra_untied, na):
+def gttm_style_to_id_dependency_ts(gttm_ts_dependency, measure_mapping, nra_untied, nra_tied):
     """Converts a dependency tree from gttm-style ids to ids in the noteaarray.
     We need both the an array of untied notes and rests (what gttm notation reference to) and the notearray (what we will use) to convert the ids.
 
@@ -178,17 +185,17 @@ def gttm_style_to_id_dependency_ts(gttm_ts_dependency, measure_mapping, nra_unti
         gttm_ts_dependency (list): a list of dependencies, each dependency is a tuple of the form (source, destination) with gttm-style ids
         measure_mapping (list): a list of measures for each note in the nra_untied
         nra_untied (np.array): a structured array of untied notes and rests
-        na (np.array): a structured array of (tied) notes
+        nra (np.array): a structured array of (tied) notes and rests
     Returns:
         list: a list of dependencies, each dependency is a tuple of the form (source, destination) with ids in the notearray
     """
     return [
         (
             note_id_to_note_array_index(
-                gttm_id_to_pt_id(dep[0], measure_mapping, nra_untied),na
+                gttm_id_to_pt_id(dep[0], measure_mapping, nra_untied),nra_tied
             ),
             note_id_to_note_array_index(
-                gttm_id_to_pt_id(dep[1], measure_mapping, nra_untied),na
+                gttm_id_to_pt_id(dep[1], measure_mapping, nra_untied),nra_tied
             ),
         )
         for dep in gttm_ts_dependency
@@ -219,7 +226,7 @@ def _iterative_parse(xml_elem):
         return out_list, iterative_result_primary[1]
 
 
-def get_note_features(score):
+def get_note_features(score, nra):
     """Extracts the score features from a partitura score.
 
     Args:
@@ -228,80 +235,111 @@ def get_note_features(score):
     Returns:
         list: a list of notes, each note is a tuple with features
     """
-    na = pt.utils.music.ensure_notearray(
-        score,
-        include_metrical_position=True,
-        include_time_signature=True,
-    )
+    # add the time signature
+    time_signatures = score.parts[0].time_signature_map(nra["onset_div"])
+    # add metrical information
+    metrical_info = score.parts[0].metrical_position_map(nra["onset_div"])
     # correct the metrical information
-    clean_na, real_ts, real_measure_duration = correct_metrical_information(na)
+    nra, time_signatures, rel_onset_div, total_measure_div = correct_metrical_information(nra,time_signatures,metrical_info)
     # get the note features
-    note_feature = get_features_from_na(clean_na)
+    note_feature = get_features_from_nra(nra,time_signatures,rel_onset_div,total_measure_div)
     return note_feature
 
 
-def correct_metrical_information(na):
+def correct_metrical_information(nra, time_signatures,metrical_info):
     """Corrects the metrical information in the note array. This removes wrong ts and metrical info for pickup notes and ending measures."""
-    time_signatures = (
-        np.char.array(na["ts_beats"].astype(str))
-        + np.char.array(["/"] * na.shape[0])
-        + np.char.array(na["ts_beat_type"].astype(str))
+    rel_onset_div = metrical_info[:,0]
+    total_measure_div = metrical_info[:,1]
+    time_signature_strings = (
+        np.char.array(time_signatures[:,0].astype(str))
+        + np.char.array(["/"] * nra.shape[0])
+        + time_signatures[:,1].astype(str)
     )
     # get real time signature and measure duration, discarding pickup and ending measure ts
-    real_ts = np.unique(time_signatures)[-1]
-    real_measure_duration = na[time_signatures == real_ts][0]["tot_measure_div"]
+    real_ts = np.unique(time_signature_strings)[-1] #pick the one with biggest numerator
+    real_measure_duration = total_measure_div[time_signature_strings == real_ts][0]
     # find pickup notes
     pickup_note_indices = np.where(
-        (na["tot_measure_div"] != real_measure_duration)
-        * (na["onset_div"] < real_measure_duration)
+        (total_measure_div != real_measure_duration)
+        * (nra["onset_div"] < real_measure_duration)
     )[0]
     # set the pickup note to the correct metrical position
-    na["rel_onset_div"][pickup_note_indices] = (
-        na["onset_div"][pickup_note_indices]
+    rel_onset_div[pickup_note_indices] = (
+        nra["onset_div"][pickup_note_indices]
         + real_measure_duration
-        - na["tot_measure_div"][pickup_note_indices]
+        - total_measure_div[pickup_note_indices]
     )
     # set the measure duration to correct value
-    na["tot_measure_div"] = real_measure_duration
+    total_measure_div = real_measure_duration
     # set the correct time signature
-    na["ts_beats"] = real_ts.split("/")[0]
-    na["ts_mus_beats"] = real_ts.split("/")[0]
-    na["ts_beat_type"] = real_ts.split("/")[1]
-    return na, real_ts, real_measure_duration
+    time_signatures[:,0] = real_ts.split("/")[0]
+    time_signatures[:,2] = real_ts.split("/")[0]
+    time_signatures[:,1] = real_ts.split("/")[1]
+    return nra, time_signatures, rel_onset_div, total_measure_div
 
 
-def get_pc_one_hot(note_array):
-    one_hot = np.zeros((len(note_array), 12))
-    idx = (np.arange(len(note_array)),np.remainder(note_array["pitch"], 12))
-    one_hot[idx] = 1
-    return one_hot
+# def get_pc_one_hot(nra):
+#     rest_mask = np.char.startswith(nra["id"],"r")
+#     one_hot = np.zeros((len(nra), 13))
+#     idx = (np.arange(len(nra)),np.remainder(nra["pitch"], 12))
+#     idx[1][rest_mask] = 12 # set extra values for rests
+#     one_hot[idx] = 1
+#     return one_hot
 
-def get_full_pitch_one_hot(note_array, piano_range = True):
-    one_hot = np.zeros((len(note_array), 127))
-    idx = (np.arange(len(note_array)),note_array["pitch"])
-    one_hot[idx] = 1
-    if piano_range:
-        one_hot = one_hot[:, 21:109]
-    return one_hot
+# def get_full_pitch_one_hot(note_array, piano_range = True):
+#     one_hot = np.zeros((len(note_array), 127))
+#     idx = (np.arange(len(note_array)),note_array["pitch"])
+#     one_hot[idx] = 1
+#     if piano_range:
+#         one_hot = one_hot[:, 21:109]
+#     return one_hot
 
-def get_octave_one_hot(note_array):
-    one_hot = np.zeros((len(note_array), 10))
-    idx = (np.arange(len(note_array)), np.floor_divide(note_array["pitch"], 12))
-    one_hot[idx] = 1
-    return one_hot
+# def get_octave_one_hot(nra):
+#     rest_mask = np.char.startswith(nra["id"],"r")
+#     one_hot = np.zeros((len(nra), 8))
+#     idx = (np.arange(len(nra)), np.floor_divide(nra["pitch"], 12))
+#     idx[1][rest_mask] = 0 # set for 0, since no note have octave 0
+#     one_hot[idx] = 1
+#     return one_hot
+
+def get_pc_one_hot(pitch):
+    return F.one_hot(torch.remainder(pitch, 12).to(torch.int64), num_classes=12)
+
+def get_octave_one_hot(pitch):
+    return F.one_hot(torch.floor_divide(pitch, 12).to(torch.int64), num_classes=MAXIMUM_OCTAVE)
+
+def data_preparation(n_feats):
+    n_feats = torch.tensor(n_feats)
+    is_rest = n_feats[:,0]
+    # compute one hot encoding for pitch and octave
+    pc_oh = get_pc_one_hot(n_feats[:,1])
+    octave_oh = get_octave_one_hot(n_feats[:,1])
+    # remove pitch info for rests
+    pc_oh[is_rest.to(torch.int64),:] = 0
+    octave_oh[is_rest.to(torch.int64),:] = 0
+    # truncate octave to MAX_OCTAVE - MIN_OCTAVE values
+    octave_oh = octave_oh[:,MINIMUM_OCTAVE:MAXIMUM_OCTAVE]
+    duration = n_feats[:,2]
+    metrical = n_feats[:,3]
+    return torch.hstack((torch.unsqueeze(is_rest,1),pc_oh, octave_oh, torch.unsqueeze(duration,1), torch.unsqueeze(metrical,1)))
 
 
-def get_features_from_na(na):
-    """Extracts the features from the note array. It must contains the metrical information."""
-    duration = na["duration_div"] / na["tot_measure_div"]
-    # TODO: consider rests as lag from previous note
-    octave_oh = get_octave_one_hot(na)
-    pc_oh = get_pc_one_hot(na)
-    duration_feature = np.expand_dims(1- np.tanh(duration), 1)
-    metrical = np.expand_dims(na["is_downbeat"],1)  # TODO: add more metrical info
-    out = np.hstack((duration_feature, pc_oh, octave_oh,metrical))
-    return out
+def data_augmentation(n_feats):
+    return n_feats
 
+
+def get_features_from_nra(nra, time_signatures, rel_onset_div, total_measure_div):
+    """Extracts the features from the (tied) note rest array."""
+    duration = nra["duration_div"] / total_measure_div
+    pitch = nra["pitch"]
+    is_rest = np.char.startswith(nra["id"],"r")
+    metrical = rel_onset_div == 0
+    # octave_oh = get_octave_one_hot(nra)
+    # pc_oh = get_pc_one_hot(nra)
+    # duration_feature = np.expand_dims(1- np.tanh(duration), 1)
+    # metrical = np.expand_dims( rel_onset_div == 0,1)  # TODO: add more metrical info
+    # out = np.hstack((pc_oh, octave_oh,duration_feature, metrical))
+    return np.vstack((is_rest, pitch, duration, metrical)).T
 
 def gttm_id_to_pt_id(gttm_id, measure_mapping, nra_untied):
     """Translate the gttm-style ids, e.g., 'P1-3-1', to indices in partitura note array.
@@ -322,7 +360,7 @@ def gttm_id_to_pt_id(gttm_id, measure_mapping, nra_untied):
     return nra_untied[nra_index]["id"]
     
 
-def note_id_to_note_array_index(id, na):
+def note_id_to_note_array_index(id, nra):
     """Translate the note id to the index in the note array. This work because annotations in gttm database are only on tied notes.
 
     Args:
@@ -332,22 +370,16 @@ def note_id_to_note_array_index(id, na):
     Returns:
         int: index of the note in the partitura note array
     """
-    potential_indices = np.where(na["id"] == id)[0]
+    if id[0] == "r":
+        raise ValueError("Trying to build an arc from a rest")
+    potential_indices = np.where(nra["id"] == id)[0]
     if len(potential_indices) == 1:
-        return np.where(na["id"] == id)[0][0]
-    # elif id=="r1": # there is a common problem with pickup measures and number of rests
-    #     print("Warning: rest id r1 not found. Returning 0")
-    #     return 0
+        return np.where(nra["id"] == id)[0][0]
     else:
         raise Exception("Problem with note id: ", id)
-        # print("Problem with note id: ", id)
-        # return 0
 
 
-def get_dependency_arcs(ts_xml_file, score):
-    na = pt.utils.music.ensure_notearray(
-        score,  
-    )
+def get_dependency_arcs(ts_xml_file, score, nra_tied):
     gttm_ts = ts_xml_to_dependency_tree(ts_xml_file)
     # compute untied (untied) notes and rests array. We need it because the gttm notation takes both into account in its counting
     na_untied = pt.utils.music.note_array_from_note_list(score.parts[0].notes)
@@ -363,20 +395,37 @@ def get_dependency_arcs(ts_xml_file, score):
     # get the gttm-style dependency tree
     m_map = score.parts[0].measure_number_map(nra_untied["onset_div"])
     try:
-        return gttm_style_to_id_dependency_ts(gttm_ts, m_map, nra_untied, na), gttm_ts
+        return gttm_style_to_id_dependency_ts(gttm_ts, m_map, nra_untied, nra_tied), gttm_ts
     except: # there is a common error in pickup measures where the first rest is not counted
         print("Trying to solve first measure error in: ", ts_xml_file)
         try:
-            return  gttm_style_to_id_dependency_ts(gttm_ts, m_map[1:], nra_untied[1:], na), gttm_ts
+            return  gttm_style_to_id_dependency_ts(gttm_ts, m_map[1:], nra_untied[1:], nra_tied), gttm_ts
         except:
             try:
-                return  gttm_style_to_id_dependency_ts(gttm_ts, m_map[2:], nra_untied[2:], na), gttm_ts
+                return  gttm_style_to_id_dependency_ts(gttm_ts, m_map[2:], nra_untied[2:], nra_tied), gttm_ts
             except:
                 raise ValueError("Can't assign ids in: ", ts_xml_file)
 
 def get_note_features_and_dep_arcs(score_file, ts_xml_file):
     score = pt.load_musicxml(score_file, force_note_ids=True)
-    # get the note array
-    note_features = get_note_features(score)
-    dep_arcs, gttm_style_dep = get_dependency_arcs(ts_xml_file, score)
-    return note_features, dep_arcs
+    # get the rest note (tied) array
+    nra = get_nra(score)
+    # compute features
+    note_features = get_note_features(score,nra)
+    # compute dependency arcs
+    dep_arcs, gttm_style_dep = get_dependency_arcs(ts_xml_file, score, nra)
+    return note_features, dep_arcs, gttm_style_dep
+
+def get_nra(score):
+    # get tied note array
+    na = pt.utils.music.ensure_notearray(
+        score
+    )[["onset_div","duration_div","pitch","id"]]
+    # get rest array
+    ra = pt.utils.music.ensure_rest_array(
+        score.parts[0]
+    )[["onset_div","duration_div","pitch","id"]]
+    # merge the two and sort by onset
+    nra = np.hstack([na,ra])
+    nra.sort(order="onset_div")
+    return nra

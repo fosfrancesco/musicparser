@@ -28,10 +28,9 @@ def main():
         print("Using pos_weight", pos_weight)
     else:
         pos_weight = 1
-    model = ArcPredictionLightModel(24, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation)
+    model = ArcPredictionLightModel(19, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation)
 
     if wandb_log:
-        # name = f"{n_layer}-{n_hidden}-{jk_mode}-{pot_edges_dist}-{linear_assignment}-{conv_type}-d{dropout}"
         name = f"{embed_type}-{n_layers}-{n_hidden}-lr={lr}-wd={weight_decay}-dr={dropout}-act={activation}"        
         wandb_logger = WandbLogger(log_model = True, project="Parsing TS", name= name )
     else:
