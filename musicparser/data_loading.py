@@ -19,6 +19,7 @@ class TSDataModule(LightningDataModule):
         super(TSDataModule, self).__init__()
         self.batch_size = batch_size
         self.num_workers = num_workers
+        # instatiate 3 different datasets for augmentation
         self.dataset = TSDataset(Path("data"))
         self.positive_weight = self.dataset.get_positive_weight()
         # self.features = self.dataset.features
@@ -31,10 +32,12 @@ class TSDataModule(LightningDataModule):
         idxs = range(len(self.dataset))
         trainval_idx, test_idx = train_test_split(idxs, test_size=0.3, random_state=0)
         train_idx, val_idx = train_test_split(trainval_idx, test_size=0.1, random_state=0)
-
-        self.dataset_train = self.dataset[train_idx]
-        self.dataset_val = self.dataset[val_idx]
-        self.dataset_test = self.dataset[test_idx]
+        # create the datasets
+        self.dataset_train = torch.utils.data.Subset(self.dataset,train_idx)
+        self.dataset_val = torch.utils.data.Subset(self.dataset,val_idx)
+        self.dataset_test = torch.utils.data.Subset(self.dataset,test_idx)
+        # set the data augmentation for the training set
+        self.dataset_train.data_augmentation = True
         # self.dataset_predict = self.dataset[test_idx[:5]]
         print(f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}")
         # compute the positive weight to be used to balance the loss
@@ -55,11 +58,12 @@ class TSDataModule(LightningDataModule):
 class TSDataset(Dataset):
     """Dataset for the TS trees."""
 
-    def __init__(self, data_folder):
+    def __init__(self, data_folder, data_augmentation=False):
         """
         Args:
             data_folder (string): Path to the folder containing the data.
         """
+        self.data_augmentation = data_augmentation
         self.data_df = get_data_df(data_folder)
         self.note_features = []
         self.dep_arcs = []
@@ -75,8 +79,8 @@ class TSDataset(Dataset):
                 indices = torch.arange(len(n_feat))
                 cart_prod = torch.cartesian_prod(indices,indices) # all possible pairs
                 pot_arcs = cart_prod[cart_prod[:,0]!=cart_prod[:,1]] # remove self loops
-                starting_rest_mask = n_feat[pot_arcs[:,0]][:,0]
-                ending_rest_mask = n_feat[pot_arcs[:,1]][:,0]
+                starting_rest_mask = n_feat[pot_arcs[:,0]][:,1]
+                ending_rest_mask = n_feat[pot_arcs[:,1]][:,1]
                 pot_arcs = pot_arcs[~np.logical_or(starting_rest_mask, ending_rest_mask)]
                 # compute the ground truth mask over the pot arcs
                 truth_mask = get_edges_mask(d_arc, pot_arcs)
@@ -93,7 +97,11 @@ class TSDataset(Dataset):
 
     def __getitem__(self, idx):
         # return [(self.note_features[i], self.dep_arcs[i], self.truth_masks[i], self.pot_arcs[i]) for i in idx]
-        return [(data_preparation(self.note_features[i]), self.truth_masks[i], self.pot_arcs[i]) for i in idx]
+        if self.data_augmentation:
+            return data_preparation(data_augmentation(self.note_features[idx])), self.truth_masks[idx], self.pot_arcs[idx]
+        else:
+            return data_preparation(self.note_features[idx]), self.truth_masks[idx], self.pot_arcs[idx]
+       
 
     def get_positive_weight(self):
         return sum([len(truth_mask)/torch.sum(truth_mask) for truth_mask in self.truth_masks])/len(self.truth_masks)
@@ -310,10 +318,10 @@ def get_octave_one_hot(pitch):
 
 def data_preparation(n_feats):
     n_feats = torch.tensor(n_feats)
-    is_rest = n_feats[:,0]
+    is_rest = n_feats[:,1]
     # compute one hot encoding for pitch and octave
-    pc_oh = get_pc_one_hot(n_feats[:,1])
-    octave_oh = get_octave_one_hot(n_feats[:,1])
+    pc_oh = get_pc_one_hot(n_feats[:,0])
+    octave_oh = get_octave_one_hot(n_feats[:,0])
     # remove pitch info for rests
     pc_oh[is_rest.to(torch.int64),:] = 0
     octave_oh[is_rest.to(torch.int64),:] = 0
@@ -325,7 +333,9 @@ def data_preparation(n_feats):
 
 
 def data_augmentation(n_feats):
-    return n_feats
+    random_transp = torch.randint(low=-12, high = 13)
+    transposed_pitches = n_feats[:,0] + random_transp
+    return torch.hstack((torch.unsqueeze(transposed_pitches,1),n_feats[:,1:]))
 
 
 def get_features_from_nra(nra, time_signatures, rel_onset_div, total_measure_div):
@@ -339,7 +349,7 @@ def get_features_from_nra(nra, time_signatures, rel_onset_div, total_measure_div
     # duration_feature = np.expand_dims(1- np.tanh(duration), 1)
     # metrical = np.expand_dims( rel_onset_div == 0,1)  # TODO: add more metrical info
     # out = np.hstack((pc_oh, octave_oh,duration_feature, metrical))
-    return np.vstack((is_rest, pitch, duration, metrical)).T
+    return np.vstack((pitch, is_rest, duration, metrical)).T
 
 def gttm_id_to_pt_id(gttm_id, measure_mapping, nra_untied):
     """Translate the gttm-style ids, e.g., 'P1-3-1', to indices in partitura note array.

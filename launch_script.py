@@ -10,8 +10,8 @@ from musicparser.models import ArcPredictionLightModel
 
 num_workers = 20
 embed_type = "RNN"
-n_layers = 2
-n_hidden = 300
+n_layers = 3
+n_hidden = 200
 lr = 0.005
 weight_decay = 0.004
 dropout = 0.3
@@ -46,6 +46,7 @@ def main():
         )
 
     trainer.fit(model, datamodule)
+    trainer.test(model, datamodule)
 
 
 
