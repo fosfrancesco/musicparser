@@ -181,8 +181,11 @@ def ts_xml_to_dependency_tree(xml_file):
         list: a list of dependencies, each dependency is a tuple of the form (source, destination) with gttm-style ids
     """
     tree = ET.parse(str(xml_file))
-    root = tree.getroot()
-    return _iterative_parse(root)[0]
+    xml_root = tree.getroot()
+    dep_arcs, root = _iterative_parse(xml_root)
+    # # add the root
+    # dep_arcs.append(("ROOT", -1))
+    return  dep_arcs, root
 
 
 def gttm_style_to_id_dependency_ts(gttm_ts_dependency, measure_mapping, nra_untied, nra_tied):
@@ -382,6 +385,8 @@ def note_id_to_note_array_index(id, nra):
     """
     if id[0] == "r":
         raise ValueError("Trying to build an arc from a rest")
+    if id[0] == "ROOT":
+        return "ROOT"
     potential_indices = np.where(nra["id"] == id)[0]
     if len(potential_indices) == 1:
         return np.where(nra["id"] == id)[0][0]
@@ -390,7 +395,7 @@ def note_id_to_note_array_index(id, nra):
 
 
 def get_dependency_arcs(ts_xml_file, score, nra_tied):
-    gttm_ts = ts_xml_to_dependency_tree(ts_xml_file)
+    gttm_ts, gttm_root = ts_xml_to_dependency_tree(ts_xml_file)
     # compute untied (untied) notes and rests array. We need it because the gttm notation takes both into account in its counting
     na_untied = pt.utils.music.note_array_from_note_list(score.parts[0].notes)
     ra_untied = pt.utils.music.rest_array_from_rest_list(score.parts[0].rests)

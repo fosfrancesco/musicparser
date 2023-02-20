@@ -14,10 +14,10 @@ n_layers = 3
 n_hidden = 200
 lr = 0.005
 weight_decay = 0.004
-dropout = 0.3
+dropout = 0.0
 wandb_log = False
 patience = 10
-devices = [1]
+devices = [3]
 use_pos_weight = True
 activation = "relu"
 

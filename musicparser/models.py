@@ -4,6 +4,9 @@ import torch.nn.functional as F
 from pytorch_lightning import LightningModule
 import torch_geometric as pyg
 from torchmetrics.classification import BinaryF1Score, BinaryAccuracy
+import numpy as np
+
+from musicparser.postprocessing import chuliu_edmonds_one_root
 
 class TransformerEncoder(torch.nn.Module):
     def __init__(
@@ -124,19 +127,24 @@ class RNNEncoder(torch.nn.Module):
 
 
 class ArcDecoder(torch.nn.Module):
-    def __init__(self, hidden_channels, activation=F.relu):
+    def __init__(self, hidden_channels, activation=F.relu, dropout=0.3):
         super().__init__()
         self.activation = activation
-        self.lin1 = nn.Linear(2 * hidden_channels, hidden_channels)
-        self.lin2 = nn.Linear(hidden_channels, 1)
+        self.lin1 = nn.Linear(hidden_channels, hidden_channels)
+        self.lin2 = nn.Linear(hidden_channels, hidden_channels)
+        self.bilinear = nn.Bilinear(hidden_channels, hidden_channels, 1)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, z, pot_arcs):
-        # concatenate the embeddings of the two elements
-        z = torch.cat([z[pot_arcs[:,0]],z[pot_arcs[:,1]]],dim=-1)
-        # predict
-        z = self.lin1(z)
-        z = self.activation(z)
-        z = self.lin2(z)
+        # # concatenate the embeddings of the two elements
+        # z = torch.cat([z[pot_arcs[:,0]],z[pot_arcs[:,1]]],dim=-1)
+        # # predict
+        # z = self.lin1(z)
+        # z = self.activation(z)
+        # z = self.lin2(z)
+        input1 = z[pot_arcs[:, 0]]
+        input2 = z[pot_arcs[:, 1]]
+        z = self.bilinear(self.dropout(self.activation(self.lin1(input1))), self.dropout(self.activation(self.lin2(input2))))
         return z.view(-1)
 
 
@@ -148,7 +156,7 @@ class ArcPredictionModel(nn.Module):
         elif activation == "gelu":
             activation = F.gelu
         self.encoder = RNNEncoder(input_dim, hidden_dim, num_layers, dropout=dropout)
-        self.decoder = ArcDecoder(hidden_dim, activation=activation)
+        self.decoder = ArcDecoder(hidden_dim, activation=activation, dropout=dropout)
 
     def forward(self, note_features, pot_arcs):
         z = self.encoder(note_features)
@@ -215,12 +223,37 @@ class ArcPredictionLightModel(LightningModule):
         self.log("val_loss", loss.item(), batch_size=1)
         self.log("val_fscore", val_fscore.item(), prog_bar=True, batch_size=1)
         # postprocess the values
-        adj_pred_prob= torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).to_dense().cpu()
-        max_mask = adj_pred_prob.max(dim=0,keepdim=True)[0] == adj_pred_prob
-        adj_pred_postp = adj_pred_prob * max_mask
-        adj_pred_postp[adj_pred_postp!= 0 ] = 1
+        ###################################### OLD POSTPROCESSING with only argmax ######################################
+        # adj_pred_prob= torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).to_dense().cpu()
+        # max_mask = adj_pred_prob.max(dim=0,keepdim=True)[0] == adj_pred_prob
+        # adj_pred_postp = adj_pred_prob * max_mask
+        # adj_pred_postp[adj_pred_postp!= 0 ] = 1
+        # val_fscore_postp = self.val_f1score_postp.cpu()(adj_pred_postp.flatten(), adj_target.flatten())
+        # self.log("val_fscore_postp", val_fscore_postp.item(), prog_bar=True, batch_size=1)
+        ###################################### NEW POSTPROCESSING with chuliu edmonds ######################################
+        adj_pred_logits= torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).cpu().to_dense()
+        adj_pred_log_probs = F.logsigmoid(adj_pred_logits)
+        head_seq = chuliu_edmonds_one_root(adj_pred_log_probs.numpy().T) # remove the head
+        adj_pred_postp = torch.zeros((num_notes,num_notes))
+        # dependencies = []
+        # for word in self.words:
+        #     if word.head == 0:
+        #         # make a word for the ROOT
+        #         word_entry = {ID: 0, TEXT: "ROOT"}
+        #         head = Word(word_entry)
+        #     else:
+        #         # id is index in words list + 1
+        #         head = self.words[word.head - 1]
+        #         if word.head != head.id:
+        #             raise ValueError("Dependency tree is incorrectly constructed")
+        #     self.dependencies.append((head, word.deprel, word))
+        for i, head in enumerate(head_seq):
+            # TODO: handle the head == 0 case
+            if head != 0:
+                adj_pred_postp[head, i] = 1
         val_fscore_postp = self.val_f1score_postp.cpu()(adj_pred_postp.flatten(), adj_target.flatten())
         self.log("val_fscore_postp", val_fscore_postp.item(), prog_bar=True, batch_size=1)
+
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
