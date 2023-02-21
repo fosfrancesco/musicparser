@@ -10,25 +10,31 @@ from musicparser.models import ArcPredictionLightModel
 
 num_workers = 20
 embed_type = "RNN"
-n_layers = 3
+n_layers = 2
 n_hidden = 200
 lr = 0.005
 weight_decay = 0.004
-dropout = 0.0
+dropout = 0.1
 wandb_log = False
-patience = 10
-devices = [3]
+patience = 30
+devices = [2]
 use_pos_weight = True
 activation = "relu"
+data_augmentation = False
+embedding_dim = {"pitch": 24, "duration": 8, "metrical": 2}
+use_embeddings = False
+biaffine = False
+
 
 def main():
-    datamodule = TSDataModule(batch_size=1, num_workers=num_workers)
+    datamodule = TSDataModule(batch_size=1, num_workers=num_workers, will_use_embeddings=use_embeddings, data_augmentation=data_augmentation)
     if use_pos_weight:
         pos_weight = int(datamodule.positive_weight)
         print("Using pos_weight", pos_weight)
     else:
         pos_weight = 1
-    model = ArcPredictionLightModel(19, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation)
+    input_dim = embedding_dim["pitch"] + embedding_dim["duration"] + embedding_dim["metrical"] if use_embeddings else 20
+    model = ArcPredictionLightModel(input_dim, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation, use_embeddings=use_embeddings, embedding_dim=embedding_dim, biaffine=biaffine)
 
     if wandb_log:
         name = f"{embed_type}-{n_layers}-{n_hidden}-lr={lr}-wd={weight_decay}-dr={dropout}-act={activation}"        

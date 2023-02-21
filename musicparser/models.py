@@ -7,6 +7,10 @@ from torchmetrics.classification import BinaryF1Score, BinaryAccuracy
 import numpy as np
 
 from musicparser.postprocessing import chuliu_edmonds_one_root
+from musicparser.data_loading import DURATIONS, get_feats_one_hot
+
+
+
 
 class TransformerEncoder(torch.nn.Module):
     def __init__(
@@ -37,42 +41,56 @@ class RNNEncoder(torch.nn.Module):
         input_dim,
         hidden_dim,
         rnn_depth,
-        cell_type="GRU",
-        dropout=None,
+        dropout=0,
+        embedding_dim = {},
+        use_embeddings = True,
         bidirectional=True,
     ):
         super().__init__()
 
         if hidden_dim % 2 != 0:
             raise ValueError("Hidden_dim must be an even integer")
+        if use_embeddings and embedding_dim == {}:
+            raise ValueError("If use_embeddings is True, embedding_dim must be provided")
         self.hidden_dim = hidden_dim
-
-        if cell_type == "GRU":
-            rnn_cell = nn.GRU
-        elif cell_type == "LSTM":
-            rnn_cell = nn.LSTM
-        else:
-            raise ValueError(f"Unknown RNN cell type: {cell_type}")
-
-        if dropout is None:
-            dropout = 0
+        self.dropout = nn.Dropout(dropout)
+        self.use_embeddings = use_embeddings
 
         # RNN layer.
-        self.rnn = rnn_cell(
+        self.rnn = nn.GRU(
             input_size=input_dim,
             hidden_size=hidden_dim // 2 if bidirectional else hidden_dim,
             bidirectional=bidirectional,
             num_layers=rnn_depth,
             dropout=dropout,
         )
+        # embedding layer
+        if use_embeddings:
+            self.embedding_dim = 128 + len(DURATIONS)+ 1
+            self.embedding_pitch = nn.Embedding(128, embedding_dim["pitch"])
+            self.embedding_duration = nn.Embedding(len(DURATIONS), embedding_dim["duration"])
+            self.embedding_metrical = nn.Embedding(2, embedding_dim["metrical"])
 
-    def forward(self, sentences, sentences_len=None):
-        # sentences = nn.utils.rnn.pack_padded_sequence(sentences, sentences_len)
-        z, _ = self.rnn(sentences)
+    def forward(self, sequence, sentences_len=None):
+        pitch = sequence[:,0]
+        is_rest = sequence[:,1]
+        duration = sequence[:,2]
+        metrical = sequence[:,3]
+        if self.use_embeddings:
+            # run embedding 
+            pitch = self.embedding_pitch(pitch.long())
+            duration = self.embedding_duration(duration.long())
+            metrical = self.embedding_metrical(metrical.long())
+            # concatenate embeddings
+            z = torch.hstack((pitch, duration, metrical))
+        else:
+            # everything is already built in the data preparation function
+            z = get_feats_one_hot(sequence).double()
+        z, _ = self.rnn(z)
         # rnn_out, _ = nn.utils.rnn.pad_packed_sequence(rnn_out)
 
         # if self.dropout is not None:
-        #     rnn_out = self.dropout(rnn_out)
+        z = self.dropout(z)
         return z
 
 
@@ -127,40 +145,46 @@ class RNNEncoder(torch.nn.Module):
 
 
 class ArcDecoder(torch.nn.Module):
-    def __init__(self, hidden_channels, activation=F.relu, dropout=0.3):
+    def __init__(self, hidden_channels, activation=F.relu, dropout=0.3, biaffine=True):
         super().__init__()
         self.activation = activation
-        self.lin1 = nn.Linear(hidden_channels, hidden_channels)
-        self.lin2 = nn.Linear(hidden_channels, hidden_channels)
-        self.bilinear = nn.Bilinear(hidden_channels, hidden_channels, 1)
+        self.biaffine = biaffine
+        if biaffine:
+            self.lin1 = nn.Linear(hidden_channels, hidden_channels)
+            self.lin2 = nn.Linear(hidden_channels, hidden_channels)
+            self.bilinear = nn.Bilinear(hidden_channels, hidden_channels, 1)
+        else:
+            self.lin1 = nn.Linear(2*hidden_channels, hidden_channels)
+            self.lin2 = nn.Linear(hidden_channels, 1)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, z, pot_arcs):
-        # # concatenate the embeddings of the two elements
-        # z = torch.cat([z[pot_arcs[:,0]],z[pot_arcs[:,1]]],dim=-1)
-        # # predict
-        # z = self.lin1(z)
-        # z = self.activation(z)
-        # z = self.lin2(z)
-        input1 = z[pot_arcs[:, 0]]
-        input2 = z[pot_arcs[:, 1]]
-        z = self.bilinear(self.dropout(self.activation(self.lin1(input1))), self.dropout(self.activation(self.lin2(input2))))
+        if self.biaffine:
+            input1 = z[pot_arcs[:, 0]]
+            input2 = z[pot_arcs[:, 1]]
+            z = self.bilinear(self.dropout(self.activation(self.lin1(input1))), self.dropout(self.activation(self.lin2(input2))))
+        else:
+            z = torch.cat([z[pot_arcs[:, 0]], z[pot_arcs[:, 1]]], dim=-1)
+            z = self.lin1(z)
+            z = self.activation(z)
+            z = self.lin2(z)
         return z.view(-1)
 
 
 class ArcPredictionModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers, activation="relu", dropout=0.2):
+    def __init__(self, input_dim, hidden_dim, num_layers, activation="relu", dropout=0.2, embedding_dim = {}, use_embedding = True, biaffine = True):
         super().__init__()
         if activation == "relu":
             activation = F.relu
         elif activation == "gelu":
             activation = F.gelu
-        self.encoder = RNNEncoder(input_dim, hidden_dim, num_layers, dropout=dropout)
-        self.decoder = ArcDecoder(hidden_dim, activation=activation, dropout=dropout)
+        self.encoder = RNNEncoder(input_dim, hidden_dim, num_layers, dropout, embedding_dim, use_embedding)
+        self.decoder = ArcDecoder(hidden_dim, activation=activation, dropout=dropout, biaffine=biaffine)
 
     def forward(self, note_features, pot_arcs):
         z = self.encoder(note_features)
         return self.decoder(z, pot_arcs)
+
 
 class ArcPredictionLightModel(LightningModule):
     def __init__(
@@ -173,6 +197,9 @@ class ArcPredictionLightModel(LightningModule):
         lr=0.001,
         weight_decay=5e-4,
         pos_weight = None,
+        embedding_dim = {"pitch": 24, "duration": 6, "metrical": 2},
+        use_embeddings = True,
+        biaffine = True
     ):
         super().__init__()
         self.lr = lr
@@ -182,8 +209,11 @@ class ArcPredictionLightModel(LightningModule):
             in_feats,
             n_hidden,
             n_layers,
-            activation=activation,
-            dropout=dropout,
+            activation,
+            dropout,
+            embedding_dim,
+            use_embeddings,
+            biaffine
         ).double()
         pos_weight = 1 if pos_weight is None else pos_weight
         self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))

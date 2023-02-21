@@ -9,18 +9,23 @@ from torch.utils.data import DataLoader
 import torch
 from sklearn.model_selection import train_test_split
 import torch.nn.functional as F
+from collections import defaultdict
 
 MINIMUM_OCTAVE = 4
-MAXIMUM_OCTAVE = 8
-
+MAXIMUM_OCTAVE = 9
+DURATIONS = [0.0312, 0.0357, 0.0417, 0.0500, 0.0556, 0.0625, 0.0833, 0.1111, 0.1250,
+        0.1667, 0.1750, 0.1875, 0.2083, 0.2222, 0.2500, 0.2917, 0.3125, 0.3333,
+        0.3750, 0.4062, 0.4167, 0.4375, 0.4444, 0.5000, 0.5556, 0.5625, 0.5833,
+        0.6250, 0.6667, 0.6875, 0.7500, 0.8333, 0.8750, 0.9167, 0.9375, 1.0000,
+        1.1250, 1.1667, 1.2500, 1.3333, 1.5000, 1.6667, 1.7500, 2.0000, 4.0000]
 
 class TSDataModule(LightningDataModule):
-    def __init__(self, batch_size=1, num_workers=4, force_reload=False, test_collection=None):
+    def __init__(self, batch_size=1, num_workers=4, will_use_embeddings=False, data_augmentation=True):
         super(TSDataModule, self).__init__()
         self.batch_size = batch_size
         self.num_workers = num_workers
         # instatiate 3 different datasets for augmentation
-        self.dataset = TSDataset(Path("data"))
+        self.dataset = TSDataset(Path("data"), will_use_embeddings=will_use_embeddings, data_augmentation=data_augmentation)
         self.positive_weight = self.dataset.get_positive_weight()
         # self.features = self.dataset.features
         # self.test_collection = test_collection
@@ -36,8 +41,11 @@ class TSDataModule(LightningDataModule):
         self.dataset_train = torch.utils.data.Subset(self.dataset,train_idx)
         self.dataset_val = torch.utils.data.Subset(self.dataset,val_idx)
         self.dataset_test = torch.utils.data.Subset(self.dataset,test_idx)
-        # set the data augmentation for the training set
-        self.dataset_train.data_augmentation = True
+        # set the data augmentation idx in the dataset
+        to_aug_dict = defaultdict(bool)
+        for idx in train_idx:
+            to_aug_dict[idx] = True
+        self.dataset.to_augment_dict = to_aug_dict
         # self.dataset_predict = self.dataset[test_idx[:5]]
         print(f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}")
         # compute the positive weight to be used to balance the loss
@@ -58,22 +66,25 @@ class TSDataModule(LightningDataModule):
 class TSDataset(Dataset):
     """Dataset for the TS trees."""
 
-    def __init__(self, data_folder, data_augmentation=False):
+    def __init__(self, data_folder, data_augmentation=False, will_use_embeddings=False):
         """
         Args:
             data_folder (string): Path to the folder containing the data.
         """
         self.data_augmentation = data_augmentation
+        self.will_use_embeddings = will_use_embeddings
         self.data_df = get_data_df(data_folder)
         self.note_features = []
         self.dep_arcs = []
         self.truth_masks = []
         self.pot_arcs = []
+        self.score_files = []
+        self.to_augment_dict = {}
         print("Loading data...")
         for title, score_file, ts_xml_file in self.data_df.values:
             try:
                 n_feat, d_arc, gttm_style_feat = get_note_features_and_dep_arcs(score_file, ts_xml_file)
-                nfeat = torch.tensor(n_feat)
+                n_feat= torch.tensor(n_feat)
                 d_arc = torch.tensor(d_arc)
                 # compute potential arcs, i.e., all arcs minus self loops and rests connections
                 indices = torch.arange(len(n_feat))
@@ -85,6 +96,7 @@ class TSDataset(Dataset):
                 # compute the ground truth mask over the pot arcs
                 truth_mask = get_edges_mask(d_arc, pot_arcs)
                 # add everything to the dataset
+                self.score_files.append(score_file)
                 self.note_features.append(n_feat)
                 self.dep_arcs.append(d_arc)
                 self.pot_arcs.append(pot_arcs)
@@ -97,10 +109,15 @@ class TSDataset(Dataset):
 
     def __getitem__(self, idx):
         # return [(self.note_features[i], self.dep_arcs[i], self.truth_masks[i], self.pot_arcs[i]) for i in idx]
-        if self.data_augmentation:
-            return data_preparation(data_augmentation(self.note_features[idx])), self.truth_masks[idx], self.pot_arcs[idx]
+        if not self.data_augmentation:
+            return data_preparation(self.note_features[idx], self.will_use_embeddings), self.truth_masks[idx], self.pot_arcs[idx]
         else:
-            return data_preparation(self.note_features[idx]), self.truth_masks[idx], self.pot_arcs[idx]
+            if not self.to_augment_dict[idx]: # don't augment, for example for test and validation
+                return data_preparation(self.note_features[idx], self.will_use_embeddings), self.truth_masks[idx], self.pot_arcs[idx]
+            else: # augment
+                return data_preparation(data_augmentation(self.note_features[idx]), self.will_use_embeddings), self.truth_masks[idx], self.pot_arcs[idx]
+
+           
        
 
     def get_positive_weight(self):
@@ -319,31 +336,42 @@ def get_pc_one_hot(pitch):
 def get_octave_one_hot(pitch):
     return F.one_hot(torch.floor_divide(pitch, 12).to(torch.int64), num_classes=MAXIMUM_OCTAVE)
 
-def data_preparation(n_feats):
-    n_feats = torch.tensor(n_feats)
+def get_duration_one_hot(duration):
+    return F.one_hot(duration.to(torch.int64), num_classes=len(DURATIONS))
+
+def get_feats_one_hot(n_feats):
+    pitch = n_feats[:,0]
     is_rest = n_feats[:,1]
+    duration = n_feats[:,2]
+    metrical = n_feats[:,3]
     # compute one hot encoding for pitch and octave
-    pc_oh = get_pc_one_hot(n_feats[:,0])
-    octave_oh = get_octave_one_hot(n_feats[:,0])
+    pc_oh = get_pc_one_hot(pitch)
+    octave_oh = get_octave_one_hot(pitch)
     # remove pitch info for rests
     pc_oh[is_rest.to(torch.int64),:] = 0
     octave_oh[is_rest.to(torch.int64),:] = 0
     # truncate octave to MAX_OCTAVE - MIN_OCTAVE values
     octave_oh = octave_oh[:,MINIMUM_OCTAVE:MAXIMUM_OCTAVE]
-    duration = n_feats[:,2]
-    metrical = n_feats[:,3]
+    # compute one hot encoding for duration
+    # duration_oh = get_duration_one_hot(duration)
+    duration = torch.tanh(torch.tensor(DURATIONS).to(duration.device)[duration])
     return torch.hstack((torch.unsqueeze(is_rest,1),pc_oh, octave_oh, torch.unsqueeze(duration,1), torch.unsqueeze(metrical,1)))
 
+def data_preparation(n_feats, will_use_embeddings=False):
+    n_feats = torch.tensor(n_feats)
+    return n_feats
 
 def data_augmentation(n_feats):
-    random_transp = torch.randint(low=-12, high = 13)
-    transposed_pitches = n_feats[:,0] + random_transp
+    random_transp_int = int(torch.randint(low=-12, high = 13, size=(1,))[0])
+    transpose_mask = (n_feats[:,1] == 0) * random_transp_int # this is to not transpose rests
+    transposed_pitches = n_feats[:,0] + transpose_mask
     return torch.hstack((torch.unsqueeze(transposed_pitches,1),n_feats[:,1:]))
 
 
 def get_features_from_nra(nra, time_signatures, rel_onset_div, total_measure_div):
     """Extracts the features from the (tied) note rest array."""
     duration = nra["duration_div"] / total_measure_div
+    duration_indices = [DURATIONS.index(round(d,4)) for d in duration]
     pitch = nra["pitch"]
     is_rest = np.char.startswith(nra["id"],"r")
     metrical = rel_onset_div == 0
@@ -352,7 +380,7 @@ def get_features_from_nra(nra, time_signatures, rel_onset_div, total_measure_div
     # duration_feature = np.expand_dims(1- np.tanh(duration), 1)
     # metrical = np.expand_dims( rel_onset_div == 0,1)  # TODO: add more metrical info
     # out = np.hstack((pc_oh, octave_oh,duration_feature, metrical))
-    return np.vstack((pitch, is_rest, duration, metrical)).T
+    return np.vstack((pitch, is_rest, duration_indices, metrical)).T
 
 def gttm_id_to_pt_id(gttm_id, measure_mapping, nra_untied):
     """Translate the gttm-style ids, e.g., 'P1-3-1', to indices in partitura note array.
@@ -423,8 +451,9 @@ def get_dependency_arcs(ts_xml_file, score, nra_tied):
 
 def get_note_features_and_dep_arcs(score_file, ts_xml_file):
     score = pt.load_musicxml(score_file, force_note_ids=True)
-    # get the rest note (tied) array
     nra = get_nra(score)
+    # remove grace notes
+    nra = nra[nra["duration_div"] != 0]
     # compute features
     note_features = get_note_features(score,nra)
     # compute dependency arcs
