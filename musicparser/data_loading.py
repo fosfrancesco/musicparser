@@ -18,6 +18,15 @@ DURATIONS = [0.0312, 0.0357, 0.0417, 0.0500, 0.0556, 0.0625, 0.0833, 0.1111, 0.1
         0.3750, 0.4062, 0.4167, 0.4375, 0.4444, 0.5000, 0.5556, 0.5625, 0.5833,
         0.6250, 0.6667, 0.6875, 0.7500, 0.8333, 0.8750, 0.9167, 0.9375, 1.0000,
         1.1250, 1.1667, 1.2500, 1.3333, 1.5000, 1.6667, 1.7500, 2.0000, 4.0000]
+METRICAL_DIVISIONS = {
+    12 : [4,3,2,2],
+    9 : [3,3,2,2],
+    8 : [2,2,2,2],
+    6 : [2,3,2,2],
+    4 : [2,2,2,2],
+    3 : [3,2,2,2],
+    2 : [2,2,2,2],
+}
 
 class TSDataModule(LightningDataModule):
     def __init__(self, batch_size=1, num_workers=4, will_use_embeddings=False, data_augmentation=True):
@@ -305,31 +314,6 @@ def correct_metrical_information(nra, time_signatures,metrical_info):
     time_signatures[:,1] = real_ts.split("/")[1]
     return nra, time_signatures, rel_onset_div, total_measure_div
 
-
-# def get_pc_one_hot(nra):
-#     rest_mask = np.char.startswith(nra["id"],"r")
-#     one_hot = np.zeros((len(nra), 13))
-#     idx = (np.arange(len(nra)),np.remainder(nra["pitch"], 12))
-#     idx[1][rest_mask] = 12 # set extra values for rests
-#     one_hot[idx] = 1
-#     return one_hot
-
-# def get_full_pitch_one_hot(note_array, piano_range = True):
-#     one_hot = np.zeros((len(note_array), 127))
-#     idx = (np.arange(len(note_array)),note_array["pitch"])
-#     one_hot[idx] = 1
-#     if piano_range:
-#         one_hot = one_hot[:, 21:109]
-#     return one_hot
-
-# def get_octave_one_hot(nra):
-#     rest_mask = np.char.startswith(nra["id"],"r")
-#     one_hot = np.zeros((len(nra), 8))
-#     idx = (np.arange(len(nra)), np.floor_divide(nra["pitch"], 12))
-#     idx[1][rest_mask] = 0 # set for 0, since no note have octave 0
-#     one_hot[idx] = 1
-#     return one_hot
-
 def get_pc_one_hot(pitch):
     return F.one_hot(torch.remainder(pitch, 12).to(torch.int64), num_classes=12)
 
@@ -338,6 +322,9 @@ def get_octave_one_hot(pitch):
 
 def get_duration_one_hot(duration):
     return F.one_hot(duration.to(torch.int64), num_classes=len(DURATIONS))
+
+def get_metrical_one_hot(metrical):
+    return F.one_hot(metrical.to(torch.int64), num_classes=6)
 
 def get_feats_one_hot(n_feats):
     pitch = n_feats[:,0]
@@ -355,7 +342,9 @@ def get_feats_one_hot(n_feats):
     # compute one hot encoding for duration
     # duration_oh = get_duration_one_hot(duration)
     duration = torch.tanh(torch.tensor(DURATIONS).to(duration.device)[duration])
-    return torch.hstack((torch.unsqueeze(is_rest,1),pc_oh, octave_oh, torch.unsqueeze(duration,1), torch.unsqueeze(metrical,1)))
+    # compute one hot encoding for metrical position
+    metrical_oh = get_metrical_one_hot(metrical)
+    return torch.hstack((torch.unsqueeze(is_rest,1),pc_oh, octave_oh, torch.unsqueeze(duration,1), metrical_oh))
 
 def data_preparation(n_feats, will_use_embeddings=False):
     n_feats = torch.tensor(n_feats)
@@ -364,8 +353,8 @@ def data_preparation(n_feats, will_use_embeddings=False):
 def data_augmentation(n_feats):
     random_transp_int = int(torch.randint(low=-12, high = 13, size=(1,))[0])
     transpose_mask = (n_feats[:,1] == 0) * random_transp_int # this is to not transpose rests
-    transposed_pitches = n_feats[:,0] + transpose_mask
-    return torch.hstack((torch.unsqueeze(transposed_pitches,1),n_feats[:,1:]))
+    n_feats[:,0] = n_feats[:,0] + transpose_mask
+    return n_feats
 
 
 def get_features_from_nra(nra, time_signatures, rel_onset_div, total_measure_div):
@@ -374,13 +363,32 @@ def get_features_from_nra(nra, time_signatures, rel_onset_div, total_measure_div
     duration_indices = [DURATIONS.index(round(d,4)) for d in duration]
     pitch = nra["pitch"]
     is_rest = np.char.startswith(nra["id"],"r")
-    metrical = rel_onset_div == 0
+    # metrical = rel_onset_div == 0
+    assert np.all(time_signatures == time_signatures[0])
+    metrical = get_metrical_strength(rel_onset_div, time_signatures[0], total_measure_div)
     # octave_oh = get_octave_one_hot(nra)
     # pc_oh = get_pc_one_hot(nra)
     # duration_feature = np.expand_dims(1- np.tanh(duration), 1)
     # metrical = np.expand_dims( rel_onset_div == 0,1)  # TODO: add more metrical info
     # out = np.hstack((pc_oh, octave_oh,duration_feature, metrical))
     return np.vstack((pitch, is_rest, duration_indices, metrical)).T
+
+
+def get_metrical_strength(rel_onsets, time_signature, total_measure_div):
+    """Computes the metrical strength of the onsets in a given time signature and total measure duration.
+    """
+    num_beats = time_signature[0]
+    if num_beats not in METRICAL_DIVISIONS.keys():
+        raise ValueError(f"The number of beats {num_beats} is not supported.")
+    metrical_divisions = np.array([1] + METRICAL_DIVISIONS[num_beats]) # added 1 for the strongest downbeat position
+    divisors = total_measure_div / np.cumprod(metrical_divisions)
+    # compute the metrical strength
+    metrical_strength = np.remainder(np.expand_dims(rel_onsets,1), divisors) == 0
+    return np.sum(metrical_strength, axis=1)
+
+        
+
+
 
 def gttm_id_to_pt_id(gttm_id, measure_mapping, nra_untied):
     """Translate the gttm-style ids, e.g., 'P1-3-1', to indices in partitura note array.
