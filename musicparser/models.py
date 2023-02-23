@@ -5,6 +5,7 @@ from pytorch_lightning import LightningModule
 import torch_geometric as pyg
 from torchmetrics.classification import BinaryF1Score, BinaryAccuracy
 import numpy as np
+from positional_encodings.torch_encodings import PositionalEncoding1D, Summer
 
 from musicparser.postprocessing import chuliu_edmonds_one_root
 from musicparser.data_loading import DURATIONS, get_feats_one_hot
@@ -139,8 +140,9 @@ class TransformerEncoder(torch.nn.Module):
             dropout = 0
 
         self.positional_encoder = PositionalEncoding(
-            hidden_dim=hidden_dim, dropout=dropout, max_len=200
+            pos_enc_dim=input_dim, dropout=dropout, max_len=200
         )
+        # self.positional_encoder = Summer(PositionalEncoding1D(input_dim))
 
         encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, dim_feedforward=hidden_dim, nhead=n_heads, dropout =dropout, activation=activation)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=encoder_depth)
@@ -148,20 +150,21 @@ class TransformerEncoder(torch.nn.Module):
     def forward(self, z, sentences_len=None):
         z = self.positional_encoder(z)
         z = self.transformer_encoder(z)
+
         return z, ""
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, hidden_dim, max_len, dropout):
+    def __init__(self, pos_enc_dim, max_len, dropout):
         super().__init__()
         
         # Info
         self.dropout = nn.Dropout(dropout)
         
         # Encoding - From formula
-        pos_encoding = torch.zeros(max_len, hidden_dim)
+        pos_encoding = torch.zeros(max_len, pos_enc_dim)
         positions_list = torch.arange(0, max_len, dtype=torch.float).view(-1, 1) # 0, 1, 2, 3, 4, 5
-        division_term = torch.exp(torch.arange(0, hidden_dim, 2).float() * (-np.log(10000.0)) / hidden_dim) # 1000^(2i/hidden_dim)
+        division_term = torch.exp(torch.arange(0, pos_enc_dim, 2).float() * (-np.log(10000.0)) / pos_enc_dim) # 1000^(2i/hidden_dim)
         
         # PE(pos, 2i) = sin(pos/1000^(2i/hidden_dim))
         pos_encoding[:, 0::2] = torch.sin(positions_list * division_term)
@@ -201,7 +204,7 @@ class NotesEncoder(torch.nn.Module):
         # Encoder layer
         if encoder_type == "rnn":
             self.encoder_cell = nn.GRU(
-                input_size=hidden_dim,
+                input_size=input_dim,
                 hidden_size=hidden_dim // 2 if bidirectional else hidden_dim,
                 bidirectional=bidirectional,
                 num_layers=rnn_depth,
@@ -209,7 +212,7 @@ class NotesEncoder(torch.nn.Module):
             )
         elif encoder_type == "transformer":
             self.encoder_cell = TransformerEncoder(
-                input_dim=hidden_dim,
+                input_dim=input_dim,
                 hidden_dim=hidden_dim,
                 encoder_depth=rnn_depth,
                 dropout=dropout
@@ -222,7 +225,7 @@ class NotesEncoder(torch.nn.Module):
             self.embedding_pitch = nn.Embedding(128, embedding_dim["pitch"])
             self.embedding_duration = nn.Embedding(len(DURATIONS), embedding_dim["duration"])
             self.embedding_metrical = nn.Embedding(6, embedding_dim["metrical"])
-        self.first_linear = nn.Linear(input_dim, hidden_dim)
+        # self.first_linear = nn.Linear(input_dim, hidden_dim)
 
     def forward(self, sequence, sentences_len=None):
         pitch = sequence[:,0]
@@ -239,7 +242,7 @@ class NotesEncoder(torch.nn.Module):
         else:
             # one hot encoding
             z = get_feats_one_hot(sequence).double()
-        z = self.first_linear(z)
+        # z = self.first_linear(z)
         z, _ = self.encoder_cell(z)
         # rnn_out, _ = nn.utils.rnn.pad_packed_sequence(rnn_out)
 
@@ -380,7 +383,8 @@ class ArcPredictionModel(nn.Module):
         elif activation == "gelu":
             activation = F.gelu
         self.encoder = NotesEncoder(input_dim, hidden_dim, num_layers, dropout, embedding_dim, use_embedding, encoder_type)
-        self.decoder = ArcDecoder(hidden_dim, activation=activation, dropout=dropout, biaffine=biaffine)
+        decoder_dim = hidden_dim if encoder_type == "rnn" else input_dim
+        self.decoder = ArcDecoder(decoder_dim, activation=activation, dropout=dropout, biaffine=biaffine)
 
     def forward(self, note_features, pot_arcs):
         z = self.encoder(note_features)
