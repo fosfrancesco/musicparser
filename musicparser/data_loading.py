@@ -29,8 +29,11 @@ METRICAL_DIVISIONS = {
 }
 
 class TSDataModule(LightningDataModule):
-    def __init__(self, batch_size=1, num_workers=4, will_use_embeddings=False, data_augmentation=True):
+    def __init__(self, batch_size=1, num_workers=4, will_use_embeddings=False, data_augmentation="no"):
         super(TSDataModule, self).__init__()
+        if data_augmentation not in ["no", "online", "preprocess"]:
+            raise ValueError("data_augmentation must be one of 'no', 'online', 'preprocess'")
+        self.data_augmentation = data_augmentation
         self.batch_size = batch_size
         self.num_workers = num_workers
         # instatiate 3 different datasets for augmentation
@@ -47,14 +50,17 @@ class TSDataModule(LightningDataModule):
         trainval_idx, test_idx = train_test_split(idxs, test_size=0.3, random_state=0)
         train_idx, val_idx = train_test_split(trainval_idx, test_size=0.1, random_state=0)
         # create the datasets
-        self.dataset_train = torch.utils.data.Subset(self.dataset,train_idx)
+        if self.data_augmentation == "preprocess":
+            self.dataset_train = TSDatasetAugmented([self.dataset[i] for i in train_idx], will_use_embeddings=self.dataset.will_use_embeddings)
+        else:
+            self.dataset_train = torch.utils.data.Subset(self.dataset,train_idx)
+            # set the data augmentation idx in the dataset
+            to_aug_dict = defaultdict(bool)
+            for idx in train_idx:
+                to_aug_dict[idx] = True
+            self.dataset.to_augment_dict = to_aug_dict
         self.dataset_val = torch.utils.data.Subset(self.dataset,val_idx)
         self.dataset_test = torch.utils.data.Subset(self.dataset,test_idx)
-        # set the data augmentation idx in the dataset
-        to_aug_dict = defaultdict(bool)
-        for idx in train_idx:
-            to_aug_dict[idx] = True
-        self.dataset.to_augment_dict = to_aug_dict
         # self.dataset_predict = self.dataset[test_idx[:5]]
         print(f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}")
         # compute the positive weight to be used to balance the loss
@@ -75,11 +81,13 @@ class TSDataModule(LightningDataModule):
 class TSDataset(Dataset):
     """Dataset for the TS trees."""
 
-    def __init__(self, data_folder, data_augmentation=False, will_use_embeddings=False):
+    def __init__(self, data_folder, data_augmentation="no", will_use_embeddings=False):
         """
         Args:
             data_folder (string): Path to the folder containing the data.
         """
+        if data_augmentation not in ["no", "online", "preprocess"]:
+            raise ValueError("data_augmentation must be one of 'no', 'online', 'preprocess'")
         self.data_augmentation = data_augmentation
         self.will_use_embeddings = will_use_embeddings
         self.data_df = get_data_df(data_folder)
@@ -117,20 +125,54 @@ class TSDataset(Dataset):
         return len(self.truth_masks)
 
     def __getitem__(self, idx):
-        # return [(self.note_features[i], self.dep_arcs[i], self.truth_masks[i], self.pot_arcs[i]) for i in idx]
-        if not self.data_augmentation:
+        # online data augmentation is implemented in getitem
+        if not self.data_augmentation == "online":
             return data_preparation(self.note_features[idx], self.will_use_embeddings), self.truth_masks[idx], self.pot_arcs[idx]
         else:
             if not self.to_augment_dict[idx]: # don't augment, for example for test and validation
                 return data_preparation(self.note_features[idx], self.will_use_embeddings), self.truth_masks[idx], self.pot_arcs[idx]
             else: # augment
-                return data_preparation(data_augmentation(self.note_features[idx]), self.will_use_embeddings), self.truth_masks[idx], self.pot_arcs[idx]
+                return data_preparation(online_data_augmentation(self.note_features[idx]), self.will_use_embeddings), self.truth_masks[idx], self.pot_arcs[idx]
 
            
        
 
     def get_positive_weight(self):
         return sum([len(truth_mask)/torch.sum(truth_mask) for truth_mask in self.truth_masks])/len(self.truth_masks)
+
+
+class TSDatasetAugmented(Dataset):
+    """Dataset for the TS trees."""
+
+    def __init__(self, pieces, will_use_embeddings=False):
+        """
+        Args:
+            data_folder (string): Path to the folder containing the data.
+        """
+        self.will_use_embeddings = will_use_embeddings
+        self.aug_note_features = []
+        self.aug_dep_arcs = []
+        self.aug_truth_masks = []
+        self.aug_pot_arcs = []
+        self.aug_score_files = []
+        print("Augmenting data...")
+        for n_feat, t_mask, p_arc in pieces:
+            for transp_int in range(-12,13):
+                n_feat_transp = n_feat.clone()
+                rest_mask = (n_feat[:,1] == 0) # this is to not transpose rests
+                transpose_mask = rest_mask*transp_int # the transp_int except for rests
+                n_feat_transp[:,0] = n_feat[:,0] + transpose_mask
+                # add everything to the dataset
+                self.aug_note_features.append(n_feat_transp)
+                self.aug_pot_arcs.append(p_arc)
+                self.aug_truth_masks.append(t_mask)
+                assert(torch.all(n_feat_transp >= 0))
+
+    def __len__(self):
+        return len(self.aug_truth_masks)
+
+    def __getitem__(self, idx):
+        return data_preparation(self.aug_note_features[idx], self.will_use_embeddings), self.aug_truth_masks[idx], self.aug_pot_arcs[idx]
 
 
 def get_edges_mask(subset_edges, total_edges, transpose=False, check_strict_subset=True):
@@ -350,7 +392,7 @@ def data_preparation(n_feats, will_use_embeddings=False):
     n_feats = torch.tensor(n_feats)
     return n_feats
 
-def data_augmentation(n_feats):
+def online_data_augmentation(n_feats):
     random_transp_int = int(torch.randint(low=-12, high = 13, size=(1,))[0])
     transpose_mask = (n_feats[:,1] == 0) * random_transp_int # this is to not transpose rests
     n_feats[:,0] = n_feats[:,0] + transpose_mask

@@ -79,35 +79,24 @@ class ArcPredictionLightModel(LightningModule):
         val_fscore = self.val_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
         self.log("val_loss", loss.item(), batch_size=1)
         self.log("val_fscore", val_fscore.item(), prog_bar=True, batch_size=1)
-        # postprocess the values
-        ###################################### OLD POSTPROCESSING with only argmax ######################################
-        # adj_pred_prob= torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).to_dense().cpu()
-        # max_mask = adj_pred_prob.max(dim=0,keepdim=True)[0] == adj_pred_prob
-        # adj_pred_postp = adj_pred_prob * max_mask
-        # adj_pred_postp[adj_pred_postp!= 0 ] = 1
-        # val_fscore_postp = self.val_f1score_postp.cpu()(adj_pred_postp.flatten(), adj_target.flatten())
-        # self.log("val_fscore_postp", val_fscore_postp.item(), prog_bar=True, batch_size=1)
-        ###################################### NEW POSTPROCESSING with chuliu edmonds ######################################
-        adj_pred_logits= torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).cpu().to_dense()
-        adj_pred_log_probs = F.logsigmoid(adj_pred_logits)
-        head_seq = chuliu_edmonds_one_root(adj_pred_log_probs.numpy().T) # remove the head
+        # postprocess with chuliu edmonds algorithm https://wendy-xiao.github.io/posts/2020-07-10-chuliuemdond_algorithm/ 
+        adj_pred_probs = torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).cpu().to_dense().numpy()
+        # add a new upper row and left column for the root to the adjency matrix
+        adj_pred_probs_root = np.vstack((np.zeros((1, num_notes)), adj_pred_probs))
+        adj_pred_probs_root = np.hstack((np.zeros((num_notes+1, 1)), adj_pred_probs_root))
+        # transpose to have an adjency matrix with edges pointing toward the parent node and take log probs
+        adj_pred_log_probs_transp_root = np.log(adj_pred_probs_root.T)
+        # postprocess with chu-liu edmonds algorithm
+        head_seq = chuliu_edmonds_one_root(adj_pred_log_probs_transp_root)
+        head_seq = head_seq[1:] # remove the root
+        # structure the postprocess results in an adjency matrix with edges that point toward the child node
         adj_pred_postp = torch.zeros((num_notes,num_notes))
-        # dependencies = []
-        # for word in self.words:
-        #     if word.head == 0:
-        #         # make a word for the ROOT
-        #         word_entry = {ID: 0, TEXT: "ROOT"}
-        #         head = Word(word_entry)
-        #     else:
-        #         # id is index in words list + 1
-        #         head = self.words[word.head - 1]
-        #         if word.head != head.id:
-        #             raise ValueError("Dependency tree is incorrectly constructed")
-        #     self.dependencies.append((head, word.deprel, word))
         for i, head in enumerate(head_seq):
-            # TODO: handle the head == 0 case
             if head != 0:
-                adj_pred_postp[head, i] = 1
+                # id is index in note list + 1
+                adj_pred_postp[head-1, i] = 1
+            else: #handle the root
+                root = i
         val_fscore_postp = self.val_f1score_postp.cpu()(adj_pred_postp.flatten(), adj_target.flatten())
         self.log("val_fscore_postp", val_fscore_postp.item(), prog_bar=True, batch_size=1)
 

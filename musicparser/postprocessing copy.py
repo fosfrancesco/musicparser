@@ -121,7 +121,7 @@ def prepare_scores(scores):
     """
     Alter the scores matrix to avoid self loops and handle the root
     """
-    # prevent self-loops, set up the root location
+    # prevent self-loops, set up the root location 
     np.fill_diagonal(scores, -float('inf')) # prevent self-loops
     scores[0] = -float('inf')
     scores[0,0] = 0
@@ -167,12 +167,8 @@ def chuliu_edmonds(scores):
 
 #===============================================================
 def chuliu_edmonds_one_root(scores):
-    """
-    Find the maximum spanning tree using Chu-Liu-Edmonds algorithm, without knowing the root.
-    This takes an adgency matrix with log probs, encoding edges that point toward the parent. 
-    """
-    assert((scores[0]==-float('inf')).all())
-    assert((np.diagonal(scores)== -float('inf')).all())  
+    """"""
+
     scores = scores.astype(np.float64)
     tree = chuliu_edmonds(scores)
     roots_to_try = np.where(np.equal(tree[1:], 0))[0]+1

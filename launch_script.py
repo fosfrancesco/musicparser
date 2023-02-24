@@ -2,29 +2,34 @@ from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning import Trainer
+import torch
+import random
 import warnings
 warnings.filterwarnings('ignore') # setting ignore as a parameter
 
 from musicparser.data_loading import TSDataModule
 from musicparser.models import ArcPredictionLightModel
 
-num_workers = 20
+num_workers = 0
 n_layers = 2
 n_hidden = 128
-lr = 0.005
+lr = 0.001
 weight_decay = 0.004
 dropout = 0.1
 wandb_log = False
-patience = 30
+patience = 10
 devices = [0]
 use_pos_weight = True
 activation = "relu"
-data_augmentation = True
+data_augmentation = "no"
 embedding_dim = {"pitch": 20, "duration": 8, "metrical": 4} # roughtly 1/4 of the hidden size
 use_embeddings = True
 biaffine = False
-encoder_type = "transformer"
+encoder_type = "rnn"
 
+torch.manual_seed(0)
+random.seed(0)
+torch.use_deterministic_algorithms(True)
 
 def main():
     datamodule = TSDataModule(batch_size=1, num_workers=num_workers, will_use_embeddings=use_embeddings, data_augmentation=data_augmentation)
