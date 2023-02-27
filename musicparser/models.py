@@ -54,10 +54,8 @@ class ArcPredictionLightModel(LightningModule):
     def training_step(self, batch, batch_idx):
         note_seq, truth_arcs_mask, pot_arcs = batch
         note_seq, truth_arcs_mask, pot_arcs = note_seq[0], truth_arcs_mask[0], pot_arcs[0]
-        num_notes = len(note_seq)
         arc_pred_mask_logits = self.module(note_seq, pot_arcs)
         loss = self.train_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float()).cpu()
-        loss = loss 
         self.log("train_loss", loss.item(), prog_bar=True, on_step=True, on_epoch=True, batch_size=1)
         return loss
 
