@@ -30,9 +30,9 @@ def main():
     parser.add_argument("--wandb_log", action="store_true", help="Use wandb for logging.")
     parser.add_argument("--num_workers", type=int, default=20)
     parser.add_argument("--patience", type=int, default=10)
-    parser.add_argument("--data_augmentation", type=str, default="preprocess", help="'preprocess', 'no', or 'online'")
+    parser.add_argument("--data_augmentation", type=str, default="no", help="'preprocess', 'no', or 'online'")
     parser.add_argument("--biaffine", action="store_true", help="Use biaffine arc decoder.")
-    parser.add_argument('--encoder_type', type=str, default="transformer", help="'rnn', or 'transformer'")
+    parser.add_argument('--encoder_type', type=str, default="rnn", help="'rnn', or 'transformer'")
     parser.add_argument("--embeddings", type=str, default="[20,8,4]")
 
     args = parser.parse_args()

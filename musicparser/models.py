@@ -49,10 +49,9 @@ class ArcPredictionLightModel(LightningModule):
         self.val_f1score_postp = BinaryF1Score()
 
     def training_step(self, batch, batch_idx):
-        note_seq, truth_arcs_mask, pot_arcs = batch
-        note_seq, truth_arcs_mask, pot_arcs = note_seq[0], truth_arcs_mask[0], pot_arcs[0]
-        num_notes = len(note_seq)
-        arc_pred_mask_logits = self.module(note_seq, pot_arcs)
+        note_seq, head_seq = batch
+        num_notes = note_seq.shape[1]
+        arc_pred_mask_logits = self.module(note_seq, head_seq)
         loss = self.train_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float()).cpu()
         # get predicted class for the edges (e.g. 0 or 1)
         # arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
@@ -62,43 +61,58 @@ class ArcPredictionLightModel(LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        note_seq, truth_arcs_mask, pot_arcs = batch
-        note_seq, truth_arcs_mask, pot_arcs = note_seq[0], truth_arcs_mask[0], pot_arcs[0]
-        num_notes = len(note_seq)
-        arc_pred_mask_logits = self.module(note_seq, pot_arcs)
-        arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
-        pred_arc = pot_arcs[torch.round(arc_pred__mask_normalized).squeeze().bool()]
-        # compute pred and ground truth adj matrices
-        if torch.sum(pred_arc) > 0:
-            adj_pred = pyg.utils.to_dense_adj(pred_arc.T, max_num_nodes=num_notes).squeeze().cpu()
-        else: # to avoid exception in to_dense_adj when there is no predicted edge
-            adj_pred = torch.zeros((num_notes, num_notes)).squeeze().to(self.device).cpu()
-        # compute loss and F1 score
-        adj_target = pyg.utils.to_dense_adj(pot_arcs[truth_arcs_mask].T, max_num_nodes=num_notes).squeeze().long().cpu()
-        loss = self.val_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float())
-        val_fscore = self.val_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
-        self.log("val_loss", loss.item(), batch_size=1)
-        self.log("val_fscore", val_fscore.item(), prog_bar=True, batch_size=1)
-        # postprocess with chuliu edmonds algorithm https://wendy-xiao.github.io/posts/2020-07-10-chuliuemdond_algorithm/ 
-        adj_pred_probs = torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).cpu().to_dense().numpy()
-        # add a new upper row and left column for the root to the adjency matrix
-        adj_pred_probs_root = np.vstack((np.zeros((1, num_notes)), adj_pred_probs))
-        adj_pred_probs_root = np.hstack((np.zeros((num_notes+1, 1)), adj_pred_probs_root))
-        # transpose to have an adjency matrix with edges pointing toward the parent node and take log probs
-        adj_pred_log_probs_transp_root = np.log(adj_pred_probs_root.T)
-        # postprocess with chu-liu edmonds algorithm
-        head_seq = chuliu_edmonds_one_root(adj_pred_log_probs_transp_root)
-        head_seq = head_seq[1:] # remove the root
-        # structure the postprocess results in an adjency matrix with edges that point toward the child node
-        adj_pred_postp = torch.zeros((num_notes,num_notes))
-        for i, head in enumerate(head_seq):
-            if head != 0:
-                # id is index in note list + 1
-                adj_pred_postp[head-1, i] = 1
-            else: #handle the root
-                root = i
-        val_fscore_postp = self.val_f1score_postp.cpu()(adj_pred_postp.flatten(), adj_target.flatten())
-        self.log("val_fscore_postp", val_fscore_postp.item(), prog_bar=True, batch_size=1)
+        note_seq, head_seq = batch
+        num_notes = note_seq.shape[1]
+        batch_arc_pred_mask_logits = self.module(note_seq, head_seq)
+        batch_arc_pred_mask_normalized = torch.sigmoid(batch_arc_pred_mask_logits)
+        for i,arc_pred_mask_normalized, arc_pred_mask_logits, h_seq in enumerate(zip(batch_arc_pred_mask_normalized, batch_arc_pred_mask_logits,head_seq)):
+            pot_arcs = torch.cartesian_prod(torch.arange(note_seq.shape[1]), torch.arange(note_seq.shape[1])).to(self.device)
+            
+            # remove rests and self loops from prediction
+            is_rest = note_seq[:,:,1].bool()
+            loop_mask = pred_arc[pred_arc[:,0]!=pred_arc[:,1]] # remove self loops
+            starting_rest_mask = is_rest[pot_arcs[:,0]]
+            ending_rest_mask = is_rest[pot_arcs[:,1]]
+            rest_mask = ~torch.logical_or(starting_rest_mask, ending_rest_mask)
+            loop_rest_mask = torch.logical_and(loop_mask, rest_mask)
+            pot_arcs = pot_arcs[loop_rest_mask] # remove from pot arcs
+            arc_pred_mask_normalized = arc_pred_mask_normalized[loop_rest_mask] #remove from pot arcs predictions
+            # get predictions from predicted mask
+            pred_arc = pot_arcs[torch.round(arc_pred_mask_normalized).bool()]
+            # compute pred and ground truth adj matrices
+            if torch.sum(pred_arc) > 0:
+                adj_pred = pyg.utils.to_dense_adj(pred_arc.T, max_num_nodes=num_notes).squeeze().cpu()
+            else: # to avoid exception in to_dense_adj when there is no predicted edge
+                adj_pred = torch.zeros((num_notes, num_notes)).squeeze().to(self.device).cpu()
+            # compute ground truth arcs from h_seq
+            truth_arcs_mask = torch.zeros(pot_)
+
+            # compute loss and F1 score
+            adj_target = pyg.utils.to_dense_adj(pot_arcs[truth_arcs_mask].T, max_num_nodes=num_notes).squeeze().long().cpu()
+            loss = self.val_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float())
+            val_fscore = self.val_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
+            self.log("val_loss", loss.item(), batch_size=1)
+            self.log("val_fscore", val_fscore.item(), prog_bar=True, batch_size=1)
+            # postprocess with chuliu edmonds algorithm https://wendy-xiao.github.io/posts/2020-07-10-chuliuemdond_algorithm/ 
+            adj_pred_probs = torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).cpu().to_dense().numpy()
+            # add a new upper row and left column for the root to the adjency matrix
+            adj_pred_probs_root = np.vstack((np.zeros((1, num_notes)), adj_pred_probs))
+            adj_pred_probs_root = np.hstack((np.zeros((num_notes+1, 1)), adj_pred_probs_root))
+            # transpose to have an adjency matrix with edges pointing toward the parent node and take log probs
+            adj_pred_log_probs_transp_root = np.log(adj_pred_probs_root.T)
+            # postprocess with chu-liu edmonds algorithm
+            head_seq = chuliu_edmonds_one_root(adj_pred_log_probs_transp_root)
+            head_seq = head_seq[1:] # remove the root
+            # structure the postprocess results in an adjency matrix with edges that point toward the child node
+            adj_pred_postp = torch.zeros((num_notes,num_notes))
+            for i, head in enumerate(head_seq):
+                if head != 0:
+                    # id is index in note list + 1
+                    adj_pred_postp[head-1, i] = 1
+                else: #handle the root
+                    root = i
+            val_fscore_postp = self.val_f1score_postp.cpu()(adj_pred_postp.flatten(), adj_target.flatten())
+            self.log("val_fscore_postp", val_fscore_postp.item(), prog_bar=True, batch_size=1)
 
 
     def configure_optimizers(self):
@@ -217,20 +231,21 @@ class NotesEncoder(torch.nn.Module):
         # self.first_linear = nn.Linear(input_dim, hidden_dim)
 
     def forward(self, sequence, sentences_len=None):
-        pitch = sequence[:,0]
-        is_rest = sequence[:,1]
-        duration = sequence[:,2]
-        metrical = sequence[:,3]
+        pitch = sequence[:,:,0]
+        is_rest = sequence[:,:,1]
+        duration = sequence[:,:,2]
+        metrical = sequence[:,:,3]
         if self.use_embeddings:
             # run embedding 
             pitch = self.embedding_pitch(pitch.long())
             duration = self.embedding_duration(duration.long())
             metrical = self.embedding_metrical(metrical.long())
             # concatenate embeddings, we are discarding rests information because it is in the pitch
-            z = torch.hstack((pitch, duration, metrical))
+            z = torch.cat((pitch, duration, metrical), dim = 2).double()
         else:
             # one hot encoding
-            z = get_feats_one_hot(sequence).double()
+            pieces_oh = [get_feats_one_hot(piece) for piece in sequence]
+            z = torch.stack(pieces_oh, dim=0).double()
         # z = self.first_linear(z)
         z, _ = self.encoder_cell(z)
         # rnn_out, _ = nn.utils.rnn.pad_packed_sequence(rnn_out)
@@ -304,11 +319,14 @@ class ArcDecoder(torch.nn.Module):
             self.lin2 = nn.Linear(hidden_channels, 1)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, z, pot_arcs):
+    def forward(self, z):
+        # compute the indices for all cartesian combinations, i.e., all possible arcs
+        pot_arcs = torch.cartesian_prod(torch.arange(z.shape[1]), torch.arange(z.shape[1]))
         if self.biaffine:
-            # get the embeddings of the starting and ending nodes, both of shape (num_pot_arcs, hidden_channels)
-            input1 =  z[pot_arcs[:, 0]]
-            input2 = z[pot_arcs[:, 1]]
+            # get the embeddings of the starting and ending nodes, both of shape (1,  num_notes**2, hidden_channels)
+            all_emb = z[:,pot_arcs].reshape([z.shape[0],z.shape[1]**2,z.shape[2]*2])
+            input1 =  all_emb[:,:, :z.shape[2]]
+            input2 = all_emb[:,:, z.shape[2]:]
             # pass through a linear layer, shape (num_pot_arcs, hidden_channels)
             input1 = self.lin1(input1)
             input2 = self.lin2(input2)
@@ -323,8 +341,8 @@ class ArcDecoder(torch.nn.Module):
             input2 = torch.cat((input2, torch.ones((input1.shape[0],1), device = input1.device)), dim = -1)
             z = self.bilinear(input1, input2)
         else:
-            # concat the embeddings of the two nodes, shape (num_pot_arcs, 2*hidden_channels)
-            z = torch.cat([z[pot_arcs[:, 0]], z[pot_arcs[:, 1]]], dim=-1)
+            # concat the embeddings of the two nodes, shape (batch, num_notes**2, 2*hidden_channels)
+            z = z[:,pot_arcs].reshape([z.shape[0],z.shape[1]**2,z.shape[2]*2])
             # pass through a linear layer, shape (num_pot_arcs, hidden_channels)
             z = self.lin1(z)
             # pass through activation, shape (num_pot_arcs, hidden_channels)
@@ -332,7 +350,7 @@ class ArcDecoder(torch.nn.Module):
             # pass through another linear layer, shape (num_pot_arcs, 1)
             z = self.lin2(z)
         # return a vector of shape (num_pot_arcs,)
-        return z.view(-1)
+        return z.view([z.shape[0],-1])
 
 
 # class ArcDecoder(torch.nn.Module):
@@ -375,9 +393,9 @@ class ArcPredictionModel(nn.Module):
         decoder_dim = hidden_dim if encoder_type == "rnn" else input_dim
         self.decoder = ArcDecoder(decoder_dim, activation=activation, dropout=dropout, biaffine=biaffine)
 
-    def forward(self, note_features, pot_arcs):
+    def forward(self, note_features, head_seq):
         z = self.encoder(note_features)
-        return self.decoder(z, pot_arcs)
+        return self.decoder(z)
 
 
 # PairwiseBilinear taken from https://github.com/stanfordnlp/stanza/blob/b18e6e80fae7cefbfed7e5255c7ba4ef6f1adae5/stanza/models/common/biaffine.py#L5

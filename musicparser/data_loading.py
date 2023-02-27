@@ -92,9 +92,10 @@ class TSDataset(Dataset):
         self.will_use_embeddings = will_use_embeddings
         self.data_df = get_data_df(data_folder)
         self.note_features = []
-        self.dep_arcs = []
-        self.truth_masks = []
-        self.pot_arcs = []
+        # self.dep_arcs = []
+        # self.truth_masks = []
+        # self.pot_arcs = []
+        self.head_seq = []
         self.score_files = []
         self.to_augment_dict = {}
         print("Loading data...")
@@ -103,42 +104,44 @@ class TSDataset(Dataset):
                 n_feat, d_arc, gttm_style_feat = get_note_features_and_dep_arcs(score_file, ts_xml_file)
                 n_feat= torch.tensor(n_feat)
                 d_arc = torch.tensor(d_arc)
-                # compute potential arcs, i.e., all arcs minus self loops and rests connections
-                indices = torch.arange(len(n_feat))
-                cart_prod = torch.cartesian_prod(indices,indices) # all possible pairs
-                pot_arcs = cart_prod[cart_prod[:,0]!=cart_prod[:,1]] # remove self loops
-                starting_rest_mask = n_feat[pot_arcs[:,0]][:,1]
-                ending_rest_mask = n_feat[pot_arcs[:,1]][:,1]
-                pot_arcs = pot_arcs[~np.logical_or(starting_rest_mask, ending_rest_mask)]
-                # compute the ground truth mask over the pot arcs
-                truth_mask = get_edges_mask(d_arc, pot_arcs)
+                # # compute potential arcs, i.e., all arcs minus self loops and rests connections
+                # indices = torch.arange(len(n_feat))
+                # cart_prod = torch.cartesian_prod(indices,indices) # all possible pairs
+                # pot_arcs = cart_prod[cart_prod[:,0]!=cart_prod[:,1]] # remove self loops
+                # starting_rest_mask = n_feat[pot_arcs[:,0]][:,1]
+                # ending_rest_mask = n_feat[pot_arcs[:,1]][:,1]
+                # pot_arcs = pot_arcs[~np.logical_or(starting_rest_mask, ending_rest_mask)]
+                # # compute the ground truth mask over the pot arcs
+                # truth_mask = get_edges_mask(d_arc, pot_arcs)
+                # compute ground truth head_seq
+                head_seq = get_head_seq(d_arc,len(n_feat))
+                rest_mask = n_feat[:,1]
+                assert (head_seq[~rest_mask.bool()] == -1).sum() == 1 # check that there is only one -1, i.e., the root
                 # add everything to the dataset
                 self.score_files.append(score_file)
                 self.note_features.append(n_feat)
-                self.dep_arcs.append(d_arc)
-                self.pot_arcs.append(pot_arcs)
-                self.truth_masks.append(truth_mask)
+                self.head_seq.append(head_seq)
+                # self.dep_arcs.append(d_arc)
+                # self.pot_arcs.append(pot_arcs)
+                # self.truth_masks.append(truth_mask)
             except Exception as e:
                 print(f"!!!!! Error with {title}", e)
 
     def __len__(self):
-        return len(self.truth_masks)
+        return len(self.head_seq)
 
     def __getitem__(self, idx):
         # online data augmentation is implemented in getitem
         if not self.data_augmentation == "online":
-            return data_preparation(self.note_features[idx], self.will_use_embeddings), self.truth_masks[idx], self.pot_arcs[idx]
+            return data_preparation(self.note_features[idx], self.will_use_embeddings), self.head_seq[idx]
         else:
             if not self.to_augment_dict[idx]: # don't augment, for example for test and validation
-                return data_preparation(self.note_features[idx], self.will_use_embeddings), self.truth_masks[idx], self.pot_arcs[idx]
+                return data_preparation(self.note_features[idx], self.will_use_embeddings), self.head_seq[idx]
             else: # augment
-                return data_preparation(online_data_augmentation(self.note_features[idx]), self.will_use_embeddings), self.truth_masks[idx], self.pot_arcs[idx]
-
-           
-       
+                return data_preparation(online_data_augmentation(self.note_features[idx]), self.will_use_embeddings), self.head_seq[idx]
 
     def get_positive_weight(self):
-        return sum([len(truth_mask)/torch.sum(truth_mask) for truth_mask in self.truth_masks])/len(self.truth_masks)
+        return np.sum([((len(hs)**2-len(hs))/len(hs)) for hs in self.head_seq])/len(self.head_seq)
 
 
 class TSDatasetAugmented(Dataset):
@@ -151,12 +154,13 @@ class TSDatasetAugmented(Dataset):
         """
         self.will_use_embeddings = will_use_embeddings
         self.aug_note_features = []
-        self.aug_dep_arcs = []
-        self.aug_truth_masks = []
-        self.aug_pot_arcs = []
+        self.aug_head_seq = []
+        # self.aug_dep_arcs = []
+        # self.aug_truth_masks = []
+        # self.aug_pot_arcs = []
         self.aug_score_files = []
         print("Augmenting data...")
-        for n_feat, t_mask, p_arc in pieces:
+        for n_feat, head_seq in pieces:
             for transp_int in range(-12,13):
                 n_feat_transp = n_feat.clone()
                 rest_mask = (n_feat[:,1] == 0) # this is to not transpose rests
@@ -164,15 +168,34 @@ class TSDatasetAugmented(Dataset):
                 n_feat_transp[:,0] = n_feat[:,0] + transpose_mask
                 # add everything to the dataset
                 self.aug_note_features.append(n_feat_transp)
-                self.aug_pot_arcs.append(p_arc)
-                self.aug_truth_masks.append(t_mask)
+                self.aug_head_seq.append(head_seq)
+                # self.aug_pot_arcs.append(p_arc)
+                # self.aug_truth_masks.append(t_mask)
                 assert(torch.all(n_feat_transp >= 0))
 
     def __len__(self):
         return len(self.aug_truth_masks)
 
     def __getitem__(self, idx):
-        return data_preparation(self.aug_note_features[idx], self.will_use_embeddings), self.aug_truth_masks[idx], self.aug_pot_arcs[idx]
+        return data_preparation(self.aug_note_features[idx], self.will_use_embeddings), self.aug_head_seq[idx]
+
+
+def get_head_seq(dep_arcs, num_notes):
+    """Get the head sequence from the dependency arcs.
+    Parameters
+    ----------
+    dep_arcs : np.array of shape (num_notes,2)
+        Dependency arcs.
+    Returns
+    -------
+    head_seq : np.array of shape (num_notes,)
+        Head sequence.
+    """
+    head_seq = np.zeros(num_notes) - 1 # initialize at -1 to check for errors. Last note) node to have -1 is the root
+    for i, (start, end) in enumerate(dep_arcs):
+        assert(head_seq[end] == -1)
+        head_seq[end] = start
+    return head_seq
 
 
 def get_edges_mask(subset_edges, total_edges, transpose=False, check_strict_subset=True):
