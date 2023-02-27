@@ -152,3 +152,7 @@ static
 
 # vscode
 .vscode
+
+# wandb
+wandb/
+Parsing TS/
