@@ -363,7 +363,8 @@ class ArcDecoder(torch.nn.Module):
         if biaffine:
             self.lin1 = nn.Linear(hidden_channels, hidden_channels)
             self.lin2 = nn.Linear(hidden_channels, hidden_channels)
-            self.bilinear = nn.Bilinear(hidden_channels +1 , hidden_channels + 1, 1)
+            # self.bilinear = nn.Bilinear(hidden_channels +1 , hidden_channels + 1, 1)
+            self.bilinear = nn.Bilinear(hidden_channels , hidden_channels, 1)
         else:
             self.lin1 = nn.Linear(2*hidden_channels, hidden_channels)
             self.lin2 = nn.Linear(hidden_channels, 1)

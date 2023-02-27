@@ -93,7 +93,7 @@ class TSDataModule(LightningDataModule):
         self.num_workers = num_workers
         # instatiate dataset
         self.dataset = TSDataset(
-            Path("data"),
+            Path("data/gttm"),
             will_use_embeddings=will_use_embeddings,
             data_augmentation=data_augmentation,
             n_jobs=num_workers,
