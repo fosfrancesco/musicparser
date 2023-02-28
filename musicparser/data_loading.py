@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from collections import defaultdict
 from joblib import Parallel, delayed
 from tqdm  import tqdm
+import json
 
 MINIMUM_OCTAVE = 4
 MAXIMUM_OCTAVE = 9
@@ -698,3 +699,113 @@ def get_nra(score):
     nra = np.hstack([na, ra])
     nra.sort(order="onset_div")
     return nra
+
+
+# --------------------- # Jazz Treebank # --------------------- #
+
+class JTBDataset(Dataset):
+    """Dataset for the Jazz treebank."""
+
+    def __init__(self, data_json_file, data_augmentation="no", only_tree = True, tree_type = "open", n_jobs=4):
+        """
+        Args:
+            data_json_file (string): Path to the json file with treebank data.
+            data_augmentation (string): One of "no", "online", "preprocess".
+                "no" means no data augmentation.
+                "online" means data augmentation is done on the fly on the __getitem__.
+                "preprocess" means data augmentation is done when loading the dataset.
+            only_tree (bool): If True, only pieces with trees are kept, otherwise also pieces with only chords.
+            tree_type (string): One of "open", "closed".
+            n_jobs (int): Number of processes to use for data augmentation.
+
+        """
+        if data_augmentation not in ["no", "online", "preprocess"]:
+            raise ValueError(
+                "data_augmentation must be one of 'no', 'online', 'preprocess'"
+            )
+        if tree_type not in ["open", "closed"]:
+            raise ValueError("tree_type must be one of 'open', 'closed'")
+        self.data_augmentation = data_augmentation
+        self.to_augment_dict = {}
+        # load data
+        print("Loading data...")
+        with open(str(Path(data_json_file))) as f:
+            dict_data = json.load(f)
+        if only_tree:
+            # remove pieces with no tree annotations
+            dict_data = [e for e in dict_data if e.get("trees") is not None]
+        if tree_type == "open":
+            self.tree = [e["trees"][0]["open_constituent_tree"] for e in dict_data]
+        
+        list_of_dicts = [d for d in list_of_dicts if d is not None]
+        print(f"Removed {original_len - len(list_of_dicts)} scores due to errors")
+        # convert to dict of lists
+        dict_of_lists = pd.DataFrame(list_of_dicts).to_dict(orient="list")
+        self.score_files = dict_of_lists["score_file"]
+        self.note_features = dict_of_lists["n_feat"]
+        self.d_arcs = dict_of_lists["d_arc"]
+        self.pot_arcs = dict_of_lists["pot_arcs"]
+        self.truth_masks = dict_of_lists["truth_mask"]
+
+    def _process_score(self, title, score_file, ts_xml_file):
+        try:
+            n_feat, d_arc, gttm_style_feat = get_note_features_and_dep_arcs(
+                score_file, ts_xml_file
+            )
+            n_feat = torch.tensor(n_feat)
+            d_arc = torch.tensor(d_arc)
+            # compute potential arcs, i.e., all arcs minus self loops and rests connections
+            indices = torch.arange(len(n_feat))
+            cart_prod = torch.cartesian_prod(indices, indices)  # all possible pairs
+            pot_arcs = cart_prod[
+                cart_prod[:, 0] != cart_prod[:, 1]
+            ]  # remove self loops
+            starting_rest_mask = n_feat[pot_arcs[:, 0]][:, 1]
+            ending_rest_mask = n_feat[pot_arcs[:, 1]][:, 1]
+            pot_arcs = pot_arcs[~np.logical_or(starting_rest_mask, ending_rest_mask)]
+            # compute the ground truth mask over the pot arcs
+            truth_mask = get_edges_mask(d_arc, pot_arcs)
+            # add everything to the dataset
+            return {"score_file" : score_file, 
+                    "n_feat" : n_feat, 
+                    "d_arc" : d_arc , 
+                    "pot_arcs" : pot_arcs, 
+                    "truth_mask" : truth_mask}
+        except Exception as e:
+            print(f"!!!!! Error with {title}", e)
+            return None
+
+    def __len__(self):
+        return len(self.truth_masks)
+
+    def __getitem__(self, idx):
+        # online data augmentation is implemented in getitem
+        if not self.data_augmentation == "online":
+            return (
+                data_preparation(self.note_features[idx], self.will_use_embeddings),
+                self.truth_masks[idx],
+                self.pot_arcs[idx],
+            )
+        else:
+            if not self.to_augment_dict[
+                idx
+            ]:  # don't augment, for example for test and validation
+                return (
+                    data_preparation(self.note_features[idx], self.will_use_embeddings),
+                    self.truth_masks[idx],
+                    self.pot_arcs[idx],
+                )
+            else:  # augment
+                return (
+                    data_preparation(
+                        online_data_augmentation(self.note_features[idx]),
+                        self.will_use_embeddings,
+                    ),
+                    self.truth_masks[idx],
+                    self.pot_arcs[idx],
+                )
+
+    def get_positive_weight(self):
+        return sum(
+            [len(truth_mask) / torch.sum(truth_mask) for truth_mask in self.truth_masks]
+        ) / len(self.truth_masks)
