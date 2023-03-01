@@ -7,7 +7,7 @@ from torchmetrics.classification import BinaryF1Score, BinaryAccuracy
 import numpy as np
 
 from musicparser.postprocessing import chuliu_edmonds_one_root
-from musicparser.data_loading import DURATIONS, get_feats_one_hot, METRICAL_LEVELS, NUMBER_OF_PITCHES
+from musicparser.data_loading import DURATIONS, get_feats_one_hot, METRICAL_LEVELS, NUMBER_OF_PITCHES, CHORD_FORM, CHORD_EXTENSION, JTB_DURATION
 
 
 class ArcPredictionLightModel(LightningModule):
@@ -25,7 +25,8 @@ class ArcPredictionLightModel(LightningModule):
         use_embeddings = True,
         biaffine = False,
         encoder_type = "rnn",
-        n_heads = 4
+        n_heads = 4,
+        data_type = "notes"
     ):
         super().__init__()
         self.lr = lr
@@ -41,7 +42,8 @@ class ArcPredictionLightModel(LightningModule):
             use_embeddings,
             biaffine,
             encoder_type,
-            n_heads
+            n_heads,
+            data_type
         ).double()
         pos_weight = 1 if pos_weight is None else pos_weight
         self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
@@ -242,6 +244,7 @@ class NotesEncoder(torch.nn.Module):
         bidirectional=True,
         activation = "relu",
         n_heads = 4,
+        data_type = "notes"
     ):
         super().__init__()
 
@@ -252,6 +255,7 @@ class NotesEncoder(torch.nn.Module):
         self.hidden_dim = hidden_dim
         self.dropout = nn.Dropout(dropout)
         self.use_embeddings = use_embeddings
+        self.data_type = data_type
 
         # Encoder layer
         if encoder_type == "rnn":
@@ -275,22 +279,51 @@ class NotesEncoder(torch.nn.Module):
             raise ValueError(f"Encoder type {encoder_type} not supported")
         # embedding layer
         if use_embeddings:
-            self.embedding_pitch = nn.Embedding(NUMBER_OF_PITCHES, embedding_dim["pitch"])
-            self.embedding_duration = nn.Embedding(len(DURATIONS), embedding_dim["duration"])
-            self.embedding_metrical = nn.Embedding(METRICAL_LEVELS, embedding_dim["metrical"])
+            if data_type == "notes":
+                self.embeddings = nn.ModuleDict({
+                    "pitch": nn.Embedding(NUMBER_OF_PITCHES, embedding_dim["pitch"]),
+                    "duration": nn.Embedding(len(DURATIONS), embedding_dim["duration"]),
+                    "metrical": nn.Embedding(METRICAL_LEVELS, embedding_dim["metrical"])
+                })
+            elif data_type == "chords":
+                # root_numbers, chord_forms, chord_extensions, duration_indices, metrical
+                # "root": emb_arg[0], "form": emb_arg[1], "ext": emb_arg[2], "duration": emb_arg[3], "metrical"
+                self.embeddings = nn.ModuleDict({
+                    "root": nn.Embedding(12, embedding_dim["root"]),
+                    "form": nn.Embedding(len(CHORD_FORM), embedding_dim["form"]),
+                    "ext": nn.Embedding(len(CHORD_EXTENSION), embedding_dim["ext"]),
+                    "duration": nn.Embedding(len(JTB_DURATION), embedding_dim["duration"]),
+                    "metrical": nn.Embedding(METRICAL_LEVELS, embedding_dim["metrical"])
+                })
+            else:
+                raise ValueError(f"Data type {data_type} not supported")
 
     def forward(self, sequence, sentences_len=None):
-        pitch = sequence[:,0]
-        is_rest = sequence[:,1]
-        duration = sequence[:,2]
-        metrical = sequence[:,3]
         if self.use_embeddings:
-            # run embedding 
-            pitch = self.embedding_pitch(pitch.long())
-            duration = self.embedding_duration(duration.long())
-            metrical = self.embedding_metrical(metrical.long())
-            # concatenate embeddings, we are discarding rests information because it is in the pitch
-            z = torch.hstack((pitch, duration, metrical))
+            # run embedding
+            if self.data_type == "notes":
+                pitch = sequence[:,0]
+                is_rest = sequence[:,1]
+                duration = sequence[:,2]
+                metrical = sequence[:,3]
+                pitch = self.embeddings["pitch"](pitch.long())
+                duration = self.embeddings["duration"](duration.long())
+                metrical = self.embeddings["metrical"](metrical.long())
+                # concatenate embeddings, we are discarding rests information because it is in the pitch
+                z = torch.hstack((pitch, duration, metrical))
+            elif self.data_type == "chords":
+                root = sequence[:,0]
+                form = sequence[:,1]
+                ext = sequence[:,2]
+                duration = sequence[:,3]
+                metrical = sequence[:,4]
+                root = self.embeddings["root"](root.long())
+                form = self.embeddings["form"](form.long())
+                ext = self.embeddings["ext"](ext.long())
+                duration = self.embeddings["duration"](duration.long())
+                metrical = self.embeddings["metrical"](metrical.long())
+                # concatenate embeddings
+                z = torch.hstack((root, form, ext, duration, metrical))
         else:
             # one hot encoding
             z = get_feats_one_hot(sequence).double()
@@ -439,13 +472,13 @@ class ArcDecoder(torch.nn.Module):
 
 
 class ArcPredictionModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers, activation="relu", dropout=0.2, embedding_dim = {}, use_embedding = True, biaffine = False, encoder_type = "rnn", n_heads = 4):
+    def __init__(self, input_dim, hidden_dim, num_layers, activation="relu", dropout=0.2, embedding_dim = {}, use_embedding = True, biaffine = False, encoder_type = "rnn", n_heads = 4, data_type = "notes"):
         super().__init__()
         if activation == "relu":
             activation = F.relu
         elif activation == "gelu":
             activation = F.gelu
-        self.encoder = NotesEncoder(input_dim, hidden_dim, num_layers, dropout, embedding_dim, use_embedding, encoder_type, activation=activation, n_heads=n_heads)
+        self.encoder = NotesEncoder(input_dim, hidden_dim, num_layers, dropout, embedding_dim, use_embedding, encoder_type, activation=activation, n_heads=n_heads, data_type = data_type)
         decoder_dim = hidden_dim if encoder_type == "rnn" else input_dim
         self.decoder = ArcDecoder(decoder_dim, activation=activation, dropout=dropout, biaffine=biaffine)
 

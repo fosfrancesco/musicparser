@@ -13,6 +13,7 @@ from collections import defaultdict
 from joblib import Parallel, delayed
 from tqdm  import tqdm
 import json
+import re
 
 MINIMUM_OCTAVE = 4
 MAXIMUM_OCTAVE = 9
@@ -74,6 +75,24 @@ METRICAL_DIVISIONS = {
 }
 METRICAL_LEVELS = 6
 NUMBER_OF_PITCHES = 128
+JTB_DURATION = [0.2500, 0.3333, 0.5000, 0.6667, 0.7500, 1.0000]
+PITCH2PITCHCLASS_MAP = {
+    0: ["C", "B#", "Dbb"],
+    1: ["C#", "B##", "Db"],
+    2: ["D", "C##", "Ebb"],
+    3: ["D#", "Eb", "Fbb"],
+    4: ["E", "D##", "Fb"],
+    5: ["F", "E#", "Gbb"],
+    6: ["F#", "E##", "Gb"],
+    7: ["G", "F##", "Abb"],
+    8: ["G#", "Ab"],
+    9: ["A", "G##", "Bbb"],
+    10: ["A#", "Bb", "Cbb"],
+    11: ["B", "A##", "Cb"],
+}
+PITCHCLASS2PITCH_MAP = {value:key for key, values in PITCH2PITCHCLASS_MAP.items() for value in values}
+CHORD_FORM = ['%', '+', 'M', 'm', 'o', 'sus']
+CHORD_EXTENSION = ['', '6', '7', '^7']
 
 
 class TSDataModule(LightningDataModule):
@@ -569,7 +588,7 @@ def get_features_from_nra(nra, time_signatures, rel_onset_div, total_measure_div
     # metrical = rel_onset_div == 0
     assert np.all(time_signatures == time_signatures[0])
     metrical = get_metrical_strength(
-        rel_onset_div, time_signatures[0], total_measure_div
+        rel_onset_div, time_signatures[0][0], total_measure_div
     )
     # octave_oh = get_octave_one_hot(nra)
     # pc_oh = get_pc_one_hot(nra)
@@ -579,9 +598,8 @@ def get_features_from_nra(nra, time_signatures, rel_onset_div, total_measure_div
     return np.vstack((pitch, is_rest, duration_indices, metrical)).T
 
 
-def get_metrical_strength(rel_onsets, time_signature, total_measure_div):
-    """Computes the metrical strength of the onsets in a given time signature and total measure duration."""
-    num_beats = time_signature[0]
+def get_metrical_strength(rel_onsets, num_beats, total_measure_div):
+    """Computes the metrical strength of the onsets in a given the number of beats in the time signature and total measure duration."""
     if num_beats not in METRICAL_DIVISIONS.keys():
         raise ValueError(f"The number of beats {num_beats} is not supported.")
     metrical_divisions = np.array(
@@ -702,11 +720,83 @@ def get_nra(score):
 
 
 # --------------------- # Jazz Treebank # --------------------- #
+class JTBDataModule(LightningDataModule):
+    def __init__(
+        self,
+        batch_size=1,
+        num_workers=4,
+        only_tree=True,
+        tree_type="complete",
+        data_augmentation="no",
+    ):
+        super(JTBDataModule, self).__init__()
+        if data_augmentation not in ["no", "online", "preprocess"]:
+            raise ValueError(
+                "data_augmentation must be one of 'no', 'online', 'preprocess'"
+            )
+        self.data_augmentation = data_augmentation
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        # instatiate dataset
+        self.dataset = JTBDataset("data/jazz_tb/treebank.json", data_augmentation=data_augmentation, only_tree=only_tree, tree_type=tree_type,n_jobs=num_workers)
+        self.positive_weight = self.dataset.get_positive_weight()
+
+    def prepare_data(self):
+        pass
+
+    def setup(self, stage=None):
+        idxs = range(len(self.dataset))
+        trainval_idx, test_idx = train_test_split(idxs, test_size=0.3, random_state=0)
+        train_idx, val_idx = train_test_split(
+            trainval_idx, test_size=0.1, random_state=0
+        )
+        # create the datasets
+        if self.data_augmentation == "preprocess":
+            self.dataset_train = TSDatasetAugmented(
+                [self.dataset[i] for i in train_idx],
+                will_use_embeddings=self.dataset.will_use_embeddings,
+            )
+        else:
+            self.dataset_train = torch.utils.data.Subset(self.dataset, train_idx)
+            # set the data augmentation idx in the dataset
+            to_aug_dict = defaultdict(bool)
+            for idx in train_idx:
+                to_aug_dict[idx] = True
+            self.dataset.to_augment_dict = to_aug_dict
+        self.dataset_val = torch.utils.data.Subset(self.dataset, val_idx)
+        self.dataset_test = torch.utils.data.Subset(self.dataset, test_idx)
+        # self.dataset_predict = self.dataset[test_idx[:5]]
+        print(
+            f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}"
+        )
+        # compute the positive weight to be used to balance the loss
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.dataset_train,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=True,
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.dataset_val, batch_size=self.batch_size, num_workers=self.num_workers
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.dataset_test, batch_size=self.batch_size, num_workers=self.num_workers
+        )
+
+    # def predict_dataloader(self):
+    #     return DataLoader(self.dataset_predict, batch_size=self.batch_size, num_workers=self.num_workers)
+
 
 class JTBDataset(Dataset):
     """Dataset for the Jazz treebank."""
 
-    def __init__(self, data_json_file, data_augmentation="no", only_tree = True, tree_type = "open", n_jobs=4):
+    def __init__(self, data_json_file, data_augmentation="no", only_tree = True, tree_type = "complete", n_jobs=4):
         """
         Args:
             data_json_file (string): Path to the json file with treebank data.
@@ -715,7 +805,7 @@ class JTBDataset(Dataset):
                 "online" means data augmentation is done on the fly on the __getitem__.
                 "preprocess" means data augmentation is done when loading the dataset.
             only_tree (bool): If True, only pieces with trees are kept, otherwise also pieces with only chords.
-            tree_type (string): One of "open", "closed".
+            tree_type (string): One of "open", "complete".
             n_jobs (int): Number of processes to use for data augmentation.
 
         """
@@ -723,8 +813,8 @@ class JTBDataset(Dataset):
             raise ValueError(
                 "data_augmentation must be one of 'no', 'online', 'preprocess'"
             )
-        if tree_type not in ["open", "closed"]:
-            raise ValueError("tree_type must be one of 'open', 'closed'")
+        if tree_type not in ["open", "complete"]:
+            raise ValueError("tree_type must be one of 'open', 'complete'")
         self.data_augmentation = data_augmentation
         self.to_augment_dict = {}
         # load data
@@ -735,45 +825,26 @@ class JTBDataset(Dataset):
             # remove pieces with no tree annotations
             dict_data = [e for e in dict_data if e.get("trees") is not None]
         if tree_type == "open":
-            self.tree = [e["trees"][0]["open_constituent_tree"] for e in dict_data]
-        
-        list_of_dicts = [d for d in list_of_dicts if d is not None]
-        print(f"Removed {original_len - len(list_of_dicts)} scores due to errors")
-        # convert to dict of lists
-        dict_of_lists = pd.DataFrame(list_of_dicts).to_dict(orient="list")
-        self.score_files = dict_of_lists["score_file"]
-        self.note_features = dict_of_lists["n_feat"]
-        self.d_arcs = dict_of_lists["d_arc"]
-        self.pot_arcs = dict_of_lists["pot_arcs"]
-        self.truth_masks = dict_of_lists["truth_mask"]
+            tree_dicts = [e["trees"][0]["open_constituent_tree"] for e in dict_data]
+        elif tree_type == "complete":
+            tree_dicts = [e["trees"][0]["complete_constituent_tree"] for e in dict_data]
 
-    def _process_score(self, title, score_file, ts_xml_file):
-        try:
-            n_feat, d_arc, gttm_style_feat = get_note_features_and_dep_arcs(
-                score_file, ts_xml_file
-            )
-            n_feat = torch.tensor(n_feat)
+        self.d_arcs = []
+        self.chords_features = []
+        self.pot_arcs = []
+        self.truth_masks = []
+        for i,tree_d in enumerate(tree_dicts):
+            d_arc, ch = parse_jht_to_dep_tree(tree_d)
             d_arc = torch.tensor(d_arc)
-            # compute potential arcs, i.e., all arcs minus self loops and rests connections
-            indices = torch.arange(len(n_feat))
-            cart_prod = torch.cartesian_prod(indices, indices)  # all possible pairs
+            self.d_arcs.append(d_arc)
+            self.chords_features.append(get_features_from_chord_labels(ch,dict_data[i]["meter"],dict_data[i]["beats"]))
+            cart_prod = torch.cartesian_prod(torch.arange(len(ch)), torch.arange(len(ch)))  # all possible pairs
             pot_arcs = cart_prod[
                 cart_prod[:, 0] != cart_prod[:, 1]
             ]  # remove self loops
-            starting_rest_mask = n_feat[pot_arcs[:, 0]][:, 1]
-            ending_rest_mask = n_feat[pot_arcs[:, 1]][:, 1]
-            pot_arcs = pot_arcs[~np.logical_or(starting_rest_mask, ending_rest_mask)]
-            # compute the ground truth mask over the pot arcs
-            truth_mask = get_edges_mask(d_arc, pot_arcs)
-            # add everything to the dataset
-            return {"score_file" : score_file, 
-                    "n_feat" : n_feat, 
-                    "d_arc" : d_arc , 
-                    "pot_arcs" : pot_arcs, 
-                    "truth_mask" : truth_mask}
-        except Exception as e:
-            print(f"!!!!! Error with {title}", e)
-            return None
+            self.pot_arcs.append(pot_arcs)
+            self.truth_masks.append(get_edges_mask(d_arc, pot_arcs))
+
 
     def __len__(self):
         return len(self.truth_masks)
@@ -782,7 +853,7 @@ class JTBDataset(Dataset):
         # online data augmentation is implemented in getitem
         if not self.data_augmentation == "online":
             return (
-                data_preparation(self.note_features[idx], self.will_use_embeddings),
+                data_preparation(self.chords_features[idx]),
                 self.truth_masks[idx],
                 self.pot_arcs[idx],
             )
@@ -791,14 +862,14 @@ class JTBDataset(Dataset):
                 idx
             ]:  # don't augment, for example for test and validation
                 return (
-                    data_preparation(self.note_features[idx], self.will_use_embeddings),
+                    data_preparation(self.chords_features[idx], self.will_use_embeddings),
                     self.truth_masks[idx],
                     self.pot_arcs[idx],
                 )
             else:  # augment
                 return (
                     data_preparation(
-                        online_data_augmentation(self.note_features[idx]),
+                        online_data_augmentation(self.chords_features[idx]),
                         self.will_use_embeddings,
                     ),
                     self.truth_masks[idx],
@@ -809,3 +880,93 @@ class JTBDataset(Dataset):
         return sum(
             [len(truth_mask) / torch.sum(truth_mask) for truth_mask in self.truth_masks]
         ) / len(self.truth_masks)
+    
+
+def parse_jht_to_dep_tree(jht_dict):
+    """Parse the python jazz harmony tree dict to a list of dependencies and a list of chord in the leaves.
+    """
+    all_leaves = []
+    all_indices = []
+
+    def _iterative_parse_jht(dict_elem):
+        """Iterative function to parse the python jazz harmony tree dict to a list of dependencies."""
+        children = dict_elem["children"]
+        if children == []:  # recursion ending condition
+            out = (
+                [],
+                {"index": len(all_leaves), "label": dict_elem["label"]},
+            )
+            # add the label of the current node to the global list of leaves
+            all_indices.append(len(all_leaves))
+            all_leaves.append(dict_elem["label"])
+            return out
+        else:  # recursive call
+            assert len(children) == 2 
+            current_label = dict_elem["label"]
+            out_list = []  # dependency list
+            iterative_result_left = _iterative_parse_jht(children[0])
+            iterative_result_right = _iterative_parse_jht(children[1])
+            # merge the dependencies lists computed deeper
+            out_list.extend(iterative_result_left[0])
+            out_list.extend(iterative_result_right[0])
+            # check if the label correspond to the left or right children and return the corresponding result
+            if iterative_result_right[1]["label"] == current_label: # default if both children are equal is to go left-right arch
+                # append the dependency for the current node
+                out_list.append((iterative_result_right[1]["index"], iterative_result_left[1]["index"]))
+                return out_list, iterative_result_right[1]
+            elif iterative_result_left[1]["label"] == current_label: 
+                print("right-left arc on label", current_label)
+                # append the dependency for the current node
+                out_list.append((iterative_result_left[1]["index"], iterative_result_right[1]["index"]))
+                return out_list, iterative_result_left[1]
+            else:
+                raise ValueError("Something went wrong with label", current_label)
+            
+    dep_arcs, root = _iterative_parse_jht(jht_dict)
+    return dep_arcs, all_leaves
+
+def parse_chord_label(chord_label):
+  # Define a regex pattern for chord symbols
+  pattern = r"([A-G][#b]?)(m|\+|%|o|sus)?(6|7|\^7)?"
+  # Match the pattern with the input chord
+  match = re.match(pattern, chord_label)
+  if match:
+    # Extract the root, basic chord form and optional added note from the match object
+    root = match.group(1)
+    form = match.group(2) or "M"
+    note = match.group(3) or ""
+    return root, form, note
+  else:
+    # Return None if the input is not a valid chord symbol
+    raise ValueError("Invalid chord symbol: {}".format(chord_label))
+
+
+def get_features_from_chord_labels(chord_labels, time_signature, rel_beats):
+    """Extracts the features from a list of chord triples."""
+    total_beat = time_signature["numerator"]
+    # clean the beats to take into account the turnaroun
+    if len(rel_beats) >= len(chord_labels):
+        rel_beats = rel_beats[:len(chord_labels)]
+    elif len(rel_beats) == len(chord_labels) -1: # case of first chord repeated
+        rel_beats = rel_beats + [1] 
+    else:
+        raise ValueError("Something is wrong in the turnaround")
+    # get durations
+    absolute_beats = np.zeros(len(rel_beats)+1)
+    past_beat_sum = -total_beat
+    for i,b in enumerate(rel_beats):
+        if b == 1: # new bar, update past_beat_sum
+            past_beat_sum += total_beat
+        absolute_beats[i] = b + past_beat_sum
+    absolute_beats[-1] = past_beat_sum + total_beat+1 # add one beat after the last to compute last duration in the next step
+    duration = np.diff(absolute_beats) / total_beat
+    duration_indices = [JTB_DURATION.index(round(d, 4)) for d in duration]
+    # get chord label features
+    chord_triples = [parse_chord_label(c_label) for c_label in chord_labels]
+    root_numbers = [PITCHCLASS2PITCH_MAP[triple[0]] for triple in chord_triples]
+    chord_forms = [CHORD_FORM.index(triple[1]) for triple in chord_triples]
+    chord_extensions = [CHORD_EXTENSION.index(triple[2]) for triple in chord_triples]
+    metrical = get_metrical_strength(
+        np.array(rel_beats) - 1, total_beat, total_beat
+    )
+    return np.vstack((root_numbers, chord_forms, chord_extensions, duration_indices, metrical)).T
