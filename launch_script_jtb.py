@@ -24,13 +24,13 @@ def main():
     parser.add_argument('--n_layers', type=int, default=2)
     parser.add_argument('--n_hidden', type=int, default=128)
     parser.add_argument('--dropout', type=float, default=0.1)
-    parser.add_argument('--lr', type=float, default=0.001)
+    parser.add_argument('--lr', type=float, default=0.0005)
     parser.add_argument('--weight_decay', type=float, default=0.004)
     parser.add_argument("--activation", type=str, default="relu")
     parser.add_argument("--wandb_log", action="store_true", help="Use wandb for logging.")
     parser.add_argument("--num_workers", type=int, default=20)
     parser.add_argument("--patience", type=int, default=10)
-    parser.add_argument("--data_augmentation", type=str, default="no", help="'preprocess', 'no', or 'online'")
+    parser.add_argument("--data_augmentation", type=str, default="preprocess", help="'preprocess', 'no', or 'online'")
     parser.add_argument("--biaffine", action="store_true", help="Use biaffine arc decoder.")
     parser.add_argument('--encoder_type', type=str, default="rnn", help="'rnn', or 'transformer'")
     parser.add_argument("--embeddings", type=str, default="[12,4,4,4,4]")
@@ -77,19 +77,22 @@ def main():
 
     if wandb_log:
         name = f"{encoder_type}-{n_layers}-{n_hidden}-lr={lr}-wd={weight_decay}-dr={dropout}-act={activation}-emb={emb_str}-aug={data_augmentation}-biaf={biaffine}-heads={n_heads}"        
-        wandb_logger = WandbLogger(log_model = True, project="Parsing TS", name= name )
+        wandb_logger = WandbLogger(log_model = True, project="Parsing JTB", name= name )
     else:
         wandb_logger = True
 
-    checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_fscore", mode="max")
-    early_stop_callback = EarlyStopping(monitor="val_fscore", min_delta=0.00, patience=patience, verbose=True, mode="max")
+    checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_fscore_postp", mode="max")
+    early_stop_callback = EarlyStopping(monitor="val_fscore_postp", min_delta=0.00, patience=patience, verbose=True, mode="max")
     trainer = Trainer(
         max_epochs=200, accelerator="auto", devices= devices, #strategy="ddp",
         num_sanity_val_steps=1,
         logger=wandb_logger,
         callbacks=[checkpoint_callback, early_stop_callback],
+        auto_lr_find=True,
         )
 
+    # trainer.tune(model, datamodule=datamodule)
+    # print("LR set to", model.lr)
     trainer.fit(model, datamodule)
     trainer.test(model, datamodule)
 

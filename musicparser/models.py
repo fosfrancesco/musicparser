@@ -50,6 +50,7 @@ class ArcPredictionLightModel(LightningModule):
         self.val_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
         self.val_f1score = BinaryF1Score()
         self.val_f1score_postp = BinaryF1Score()
+        self.val_accuracy = BinaryAccuracy()
         self.test_f1score = BinaryF1Score()
         self.test_f1score_postp = BinaryF1Score()
 
@@ -67,7 +68,7 @@ class ArcPredictionLightModel(LightningModule):
         num_notes = len(note_seq)
         arc_pred_mask_logits = self.module(note_seq, pot_arcs)
         loss = self.val_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float()).cpu()
-        self.log("val_loss", loss.item(), batch_size=1)
+        self.log("val_loss", loss.item(), on_epoch=True, batch_size=1)
 
         arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
         pred_arc = pot_arcs[torch.round(arc_pred__mask_normalized).squeeze().bool()]
@@ -80,6 +81,8 @@ class ArcPredictionLightModel(LightningModule):
         adj_target = pyg.utils.to_dense_adj(pot_arcs[truth_arcs_mask].T, max_num_nodes=num_notes).squeeze().long().cpu()
         val_fscore = self.val_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
         self.log("val_fscore", val_fscore.item(), prog_bar=True, batch_size=1)
+        val_accuracy = self.val_accuracy.cpu()(adj_pred.flatten(), adj_target.flatten())
+        self.log("val_accuracy", val_accuracy.item(), prog_bar=True, batch_size=1)
         # postprocess with chuliu edmonds algorithm https://wendy-xiao.github.io/posts/2020-07-10-chuliuemdond_algorithm/ 
         adj_pred_probs = torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).cpu().to_dense().numpy()
         # add a new upper row and left column for the root to the adjency matrix

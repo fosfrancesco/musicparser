@@ -6,6 +6,7 @@ import torch
 import random
 import argparse
 import warnings
+import wandb
 warnings.filterwarnings('ignore') # avoid printing the partitura warnings
 
 from musicparser.data_loading import TSDataModule
@@ -18,42 +19,35 @@ torch.manual_seed(0)
 random.seed(0)
 torch.use_deterministic_algorithms(True)
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--gpus', type=str, default="[3]")
-    parser.add_argument('--n_layers', type=int, default=2)
-    parser.add_argument('--n_hidden', type=int, default=128)
-    parser.add_argument('--dropout', type=float, default=0.3)
-    parser.add_argument('--lr', type=float, default=0.0001)
-    parser.add_argument('--weight_decay', type=float, default=0.004)
-    parser.add_argument("--activation", type=str, default="relu")
-    parser.add_argument("--wandb_log", action="store_true", help="Use wandb for logging.")
-    parser.add_argument("--num_workers", type=int, default=20)
-    parser.add_argument("--patience", type=int, default=10)
-    parser.add_argument("--data_augmentation", type=str, default="preprocess", help="'preprocess', 'no', or 'online'")
-    parser.add_argument("--biaffine", action="store_true", help="Use biaffine arc decoder.")
-    parser.add_argument('--encoder_type', type=str, default="transformer", help="'rnn', or 'transformer'")
-    parser.add_argument("--embeddings", type=str, default="[20,8,4]")
-    parser.add_argument('--n_heads', type=int, default=4)
+wandb_run = wandb.init(group = "Sweep-TS", job_type="TS")
+# Config parameters are automatically set by W&B sweep agent
+config = wandb.config
 
-    args = parser.parse_args()
 
-    num_workers = args.num_workers
-    n_layers = args.n_layers
-    n_hidden = args.n_hidden
-    lr = args.lr
-    weight_decay = args.weight_decay
-    dropout = args.dropout
-    wandb_log = args.wandb_log
-    patience = args.patience
-    devices = eval(args.gpus)
-    use_pos_weight = True
-    activation = args.activation
-    data_augmentation = args.data_augmentation
-    biaffine = args.biaffine
-    encoder_type = args.encoder_type
-    n_heads = args.n_heads
-    emb_arg = eval(args.embeddings)
+# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweep_TS/a8f6wlp4
+# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweep_TS/a8f6wlp4
+# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweep_TS/a8f6wlp4
+# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweep_TS/a8f6wlp4
+
+# only transformer
+
+# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweep_TS/76m4zi32
+# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweep_TS/76m4zi32
+# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweep_TS/76m4zi32
+# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweep_TS/76m4zi32
+
+def main(config):
+    # set parameters from config
+    n_layers = config["n_layers"]
+    n_hidden = config["n_hidden"]
+    lr = config["lr"]
+    weight_decay = config["weight_decay"]
+    dropout = config["dropout"]
+    activation = config["activation"]
+    biaffine = config["biaffine"]
+    encoder_type = config["encoder_type"]
+    n_heads = config["n_heads"]
+    emb_arg = eval(config["embeddings"])
     if emb_arg == []:
         use_embeddings = False
         embedding_dim = {}
@@ -63,8 +57,13 @@ def main():
         use_embeddings = True
         emb_str = f"p{emb_arg[0]}d{emb_arg[1]}m{emb_arg[2]}"
 
-    print("Starting a new run with the following parameters:")
-    print(args)
+    num_workers = 20
+    devices = [0]
+    wandb_log = True
+    patience = 15
+    use_pos_weight = True
+    data_augmentation = "preprocess"
+
 
     datamodule = TSDataModule(batch_size=1, num_workers=num_workers, will_use_embeddings=use_embeddings, data_augmentation=data_augmentation)
     if use_pos_weight:
@@ -95,5 +94,6 @@ def main():
 
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    print(f'Starting a run with {config}')
+    main(config)

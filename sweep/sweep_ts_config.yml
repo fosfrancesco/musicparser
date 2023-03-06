@@ -1,0 +1,60 @@
+program: sweep_train_ts.py
+method: bayes
+metric:
+  goal: maximize
+  name: test_fscore_postp
+parameters:
+  embeddings:
+    values:
+      - "[20,8,4]"
+      - "[22,2,8]"
+      - "[40,16,8]"
+      - "[10,4,2]"
+    distribution: categorical
+  weight_decay:
+    values:
+      - 0.0005 
+      - 0.005
+      - 0.05
+    distribution: categorical
+  encoder_type:
+    values:
+      - rnn
+      - transformer
+    distribution: categorical
+  activation:
+    values:
+      - relu
+      - gelu
+    distribution: categorical
+  n_layers:
+    max: 4
+    min: 1
+    distribution: int_uniform
+  n_hidden:
+    values:
+      - 256
+      - 128
+      - 64
+      - 32
+    distribution: categorical
+  biaffine:
+    values:
+      - True
+      - False
+    distribution: categorical
+  n_heads:
+    values:
+      - 8
+      - 4
+      - 2
+      - 1
+    distribution: categorical
+  dropout:
+    max: 0.5
+    min: 0
+    distribution: uniform
+  lr:
+    max: 0.005
+    min: 0.00005
+    distribution: uniform

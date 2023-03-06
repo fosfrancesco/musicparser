@@ -125,9 +125,10 @@ class TSDataModule(LightningDataModule):
 
     def setup(self, stage=None):
         idxs = range(len(self.dataset))
-        trainval_idx, test_idx = train_test_split(idxs, test_size=0.3, random_state=0)
-        train_idx, val_idx = train_test_split(
-            trainval_idx, test_size=0.1, random_state=0
+        ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
+        train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=ts_numerators)
+        val_idx, test_idx = train_test_split(
+            valtest_idx, test_size=0.5, random_state=0, #stratify=np.array(ts_numerators)[valtest_idx]
         )
         # create the datasets
         if self.data_augmentation == "preprocess":
@@ -204,10 +205,11 @@ class TSDataset(Dataset):
         self.d_arcs = dict_of_lists["d_arc"]
         self.pot_arcs = dict_of_lists["pot_arcs"]
         self.truth_masks = dict_of_lists["truth_mask"]
+        self.time_signatures = dict_of_lists["time_signature"]
 
     def _process_score(self, title, score_file, ts_xml_file):
         try:
-            n_feat, d_arc, gttm_style_feat = get_note_features_and_dep_arcs(
+            n_feat, d_arc, gttm_style_feat, time_signature = get_note_features_and_dep_arcs(
                 score_file, ts_xml_file
             )
             n_feat = torch.tensor(n_feat)
@@ -228,7 +230,8 @@ class TSDataset(Dataset):
                     "n_feat" : n_feat, 
                     "d_arc" : d_arc , 
                     "pot_arcs" : pot_arcs, 
-                    "truth_mask" : truth_mask}
+                    "truth_mask" : truth_mask,
+                    "time_signature" : time_signature}
         except Exception as e:
             print(f"!!!!! Error with {title}", e)
             return None
@@ -481,7 +484,7 @@ def get_note_features(score, nra):
     note_feature = get_features_from_nra(
         nra, time_signatures, rel_onset_div, total_measure_div
     )
-    return note_feature
+    return note_feature, time_signatures[0]
 
 
 def correct_metrical_information(nra, time_signatures, metrical_info):
@@ -698,10 +701,10 @@ def get_note_features_and_dep_arcs(score_file, ts_xml_file):
     # remove grace notes
     nra = nra[nra["duration_div"] != 0]
     # compute features
-    note_features = get_note_features(score, nra)
+    note_features, time_signature = get_note_features(score, nra)
     # compute dependency arcs
     dep_arcs, gttm_style_dep = get_dependency_arcs(ts_xml_file, score, nra)
-    return note_features, dep_arcs, gttm_style_dep
+    return note_features, dep_arcs, gttm_style_dep, time_signature
 
 
 def get_nra(score):
@@ -746,13 +749,14 @@ class JTBDataModule(LightningDataModule):
 
     def setup(self, stage=None):
         idxs = range(len(self.dataset))
-        trainval_idx, test_idx = train_test_split(idxs, test_size=0.3, random_state=0)
-        train_idx, val_idx = train_test_split(
-            trainval_idx, test_size=0.1, random_state=0
+        ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
+        train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=ts_numerators)
+        val_idx, test_idx = train_test_split(
+            valtest_idx, test_size=0.5, random_state=0, stratify=np.array(ts_numerators)[valtest_idx]
         )
         # create the datasets
         if self.data_augmentation == "preprocess":
-            self.dataset_train = TSDatasetAugmented(
+            self.dataset_train = JTBDatasetAugmented(
                 [self.dataset[i] for i in train_idx],
                 will_use_embeddings=self.dataset.will_use_embeddings,
             )
@@ -796,7 +800,7 @@ class JTBDataModule(LightningDataModule):
 class JTBDataset(Dataset):
     """Dataset for the Jazz treebank."""
 
-    def __init__(self, data_json_file, data_augmentation="no", only_tree = True, tree_type = "complete", n_jobs=4):
+    def __init__(self, data_json_file, data_augmentation="no", only_tree = True, tree_type = "complete", n_jobs=4, will_use_embeddings=True):
         """
         Args:
             data_json_file (string): Path to the json file with treebank data.
@@ -815,6 +819,7 @@ class JTBDataset(Dataset):
             )
         if tree_type not in ["open", "complete"]:
             raise ValueError("tree_type must be one of 'open', 'complete'")
+        self.will_use_embeddings = will_use_embeddings
         self.data_augmentation = data_augmentation
         self.to_augment_dict = {}
         # load data
@@ -833,11 +838,14 @@ class JTBDataset(Dataset):
         self.chords_features = []
         self.pot_arcs = []
         self.truth_masks = []
+        self.time_signatures = []
         for i,tree_d in enumerate(tree_dicts):
+            ts_dict = dict_data[i]["meter"]
+            self.time_signatures.append((ts_dict["numerator"],ts_dict["denominator"]))
             d_arc, ch = parse_jht_to_dep_tree(tree_d)
             d_arc = torch.tensor(d_arc)
             self.d_arcs.append(d_arc)
-            self.chords_features.append(get_features_from_chord_labels(ch,dict_data[i]["meter"],dict_data[i]["beats"]))
+            self.chords_features.append(get_features_from_chord_labels(ch,ts_dict,dict_data[i]["beats"]))
             cart_prod = torch.cartesian_prod(torch.arange(len(ch)), torch.arange(len(ch)))  # all possible pairs
             pot_arcs = cart_prod[
                 cart_prod[:, 0] != cart_prod[:, 1]
@@ -882,11 +890,46 @@ class JTBDataset(Dataset):
         ) / len(self.truth_masks)
     
 
+class JTBDatasetAugmented(Dataset):
+    """Dataset for the TS trees."""
+
+    def __init__(self, pieces, will_use_embeddings=False):
+        """
+        Args:
+            subset of pieces from the JTBDataset, with JTBDataset[idx]
+        """
+        self.will_use_embeddings = will_use_embeddings
+        self.aug_note_features = []
+        self.aug_dep_arcs = []
+        self.aug_truth_masks = []
+        self.aug_pot_arcs = []
+        self.aug_score_files = []
+        print("Augmenting data...")
+        for chord_feat, t_mask, p_arc in pieces:
+            for transp_int in range(12):
+                chord_feat_transp = chord_feat.clone()
+                # only transpose the root, by summing and modulo 12
+                chord_feat_transp[:, 0] = np.remainder(chord_feat[:, 0] + transp_int,12)
+                # add everything to the dataset
+                self.aug_note_features.append(chord_feat_transp)
+                self.aug_pot_arcs.append(p_arc)
+                self.aug_truth_masks.append(t_mask)
+
+    def __len__(self):
+        return len(self.aug_truth_masks)
+
+    def __getitem__(self, idx):
+        return (
+            data_preparation(self.aug_note_features[idx], self.will_use_embeddings),
+            self.aug_truth_masks[idx],
+            self.aug_pot_arcs[idx],
+        )
+
+
 def parse_jht_to_dep_tree(jht_dict):
     """Parse the python jazz harmony tree dict to a list of dependencies and a list of chord in the leaves.
     """
     all_leaves = []
-    all_indices = []
 
     def _iterative_parse_jht(dict_elem):
         """Iterative function to parse the python jazz harmony tree dict to a list of dependencies."""
@@ -897,7 +940,6 @@ def parse_jht_to_dep_tree(jht_dict):
                 {"index": len(all_leaves), "label": dict_elem["label"]},
             )
             # add the label of the current node to the global list of leaves
-            all_indices.append(len(all_leaves))
             all_leaves.append(dict_elem["label"])
             return out
         else:  # recursive call
@@ -915,7 +957,7 @@ def parse_jht_to_dep_tree(jht_dict):
                 out_list.append((iterative_result_right[1]["index"], iterative_result_left[1]["index"]))
                 return out_list, iterative_result_right[1]
             elif iterative_result_left[1]["label"] == current_label: 
-                print("right-left arc on label", current_label)
+                # print("right-left arc on label", current_label)
                 # append the dependency for the current node
                 out_list.append((iterative_result_left[1]["index"], iterative_result_right[1]["index"]))
                 return out_list, iterative_result_left[1]
