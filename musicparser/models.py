@@ -6,6 +6,7 @@ import torch_geometric as pyg
 from torchmetrics.classification import BinaryF1Score, BinaryAccuracy
 import numpy as np
 
+from musicparser.rpr import TransformerEncoderLayerRPR, TransformerEncoderRPR, DummyDecoder
 from musicparser.postprocessing import chuliu_edmonds_one_root
 from musicparser.data_loading import DURATIONS, get_feats_one_hot, METRICAL_LEVELS, NUMBER_OF_PITCHES, CHORD_FORM, CHORD_EXTENSION, JTB_DURATION
 
@@ -26,7 +27,8 @@ class ArcPredictionLightModel(LightningModule):
         biaffine = False,
         encoder_type = "rnn",
         n_heads = 4,
-        data_type = "notes"
+        data_type = "notes",
+        rpr = False
     ):
         super().__init__()
         self.lr = lr
@@ -43,7 +45,8 @@ class ArcPredictionLightModel(LightningModule):
             biaffine,
             encoder_type,
             n_heads,
-            data_type
+            data_type,
+            rpr
         ).double()
         pos_weight = 1 if pos_weight is None else pos_weight
         self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
@@ -163,28 +166,54 @@ class TransformerEncoder(torch.nn.Module):
         encoder_depth,
         n_heads = 4,
         dropout=None,
-        activation = "relu"
+        activation = "relu",
+        rpr = False
     ):
         super().__init__()
 
         if dropout is None:
             dropout = 0
         self.input_dim = input_dim
+        self.rpr = rpr
 
         self.positional_encoder = PositionalEncoding(
             d_model=input_dim, dropout=dropout, max_len=200
         )
-        encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, dim_feedforward=hidden_dim, nhead=n_heads, dropout =dropout, activation=activation)
-        encoder_norm = nn.LayerNorm(input_dim)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=encoder_depth, norm=encoder_norm)
+        self.dummy = DummyDecoder()
+        if not rpr: # normal transformer with absolute positional representation
+            # To make a decoder-only transformer we need to use masked encoder layers
+            # Dummy decoder to essentially just return the encoder output
+            self.transformer = nn.Transformer(
+                d_model=input_dim, nhead=n_heads, num_encoder_layers=encoder_depth,
+                num_decoder_layers=0, dropout=dropout, activation=activation,
+                dim_feedforward=hidden_dim, custom_decoder=self.dummy
+            )
+            # encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, dim_feedforward=hidden_dim, nhead=n_heads, dropout =dropout, activation=activation)
+            # encoder_norm = nn.LayerNorm(input_dim)
+            # self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=encoder_depth, norm=encoder_norm)
+        else: # relative positional representation
+            encoder_norm = nn.LayerNorm(input_dim)
+            encoder_layer = TransformerEncoderLayerRPR(input_dim, n_heads, hidden_dim, dropout, er_len=200)
+            encoder = TransformerEncoderRPR(encoder_layer, encoder_depth, encoder_norm)
+            self.transformer = nn.Transformer(
+                d_model=input_dim, nhead=n_heads, num_encoder_layers=encoder_depth,
+                num_decoder_layers=0, dropout=dropout, activation=activation,
+                dim_feedforward=hidden_dim, custom_decoder=self.dummy, custom_encoder=encoder
+            )
 
     def forward(self, z, sentences_len=None):
         # TODO: why this is rescaled like that?
         # z = self.transformer_encoder(z) * np.sqrt(self.input_dim)
         # add positional encoding
         z = self.positional_encoder(z)
+        # reshape to (seq_len, batch = 1, input_dim)
+        z = torch.unsqueeze(z,dim= 1)
         # run transformer encoder
-        z = self.transformer_encoder(z)
+        # Since there are no true decoder layers, the tgt is unused
+        # Pytorch wants src and tgt to have some equal dims however
+        z = self.transformer(src=z, tgt=z, src_mask=None)
+        # remove batch dim
+        z = torch.squeeze(z, dim=1)
         return z, ""
 
 
@@ -247,7 +276,8 @@ class NotesEncoder(torch.nn.Module):
         bidirectional=True,
         activation = "relu",
         n_heads = 4,
-        data_type = "notes"
+        data_type = "notes",
+        rpr = False
     ):
         super().__init__()
 
@@ -277,6 +307,7 @@ class NotesEncoder(torch.nn.Module):
                 dropout=dropout,
                 activation=activation,
                 n_heads=n_heads,
+                rpr = rpr
             )
         else:
             raise ValueError(f"Encoder type {encoder_type} not supported")
@@ -475,13 +506,13 @@ class ArcDecoder(torch.nn.Module):
 
 
 class ArcPredictionModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers, activation="relu", dropout=0.2, embedding_dim = {}, use_embedding = True, biaffine = False, encoder_type = "rnn", n_heads = 4, data_type = "notes"):
+    def __init__(self, input_dim, hidden_dim, num_layers, activation="relu", dropout=0.2, embedding_dim = {}, use_embedding = True, biaffine = False, encoder_type = "rnn", n_heads = 4, data_type = "notes", rpr = False):
         super().__init__()
         if activation == "relu":
             activation = F.relu
         elif activation == "gelu":
             activation = F.gelu
-        self.encoder = NotesEncoder(input_dim, hidden_dim, num_layers, dropout, embedding_dim, use_embedding, encoder_type, activation=activation, n_heads=n_heads, data_type = data_type)
+        self.encoder = NotesEncoder(input_dim, hidden_dim, num_layers, dropout, embedding_dim, use_embedding, encoder_type, activation=activation, n_heads=n_heads, data_type = data_type, rpr =rpr)
         decoder_dim = hidden_dim if encoder_type == "rnn" else input_dim
         self.decoder = ArcDecoder(decoder_dim, activation=activation, dropout=dropout, biaffine=biaffine)
 

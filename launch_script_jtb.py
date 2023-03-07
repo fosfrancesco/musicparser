@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--encoder_type', type=str, default="rnn", help="'rnn', or 'transformer'")
     parser.add_argument("--embeddings", type=str, default="[12,4,4,4,4]")
     parser.add_argument('--n_heads', type=int, default=4)
+    parser.add_argument('--pos_enc', type= str, default="relative", help="'absolute', or 'relative'" )
 
     args = parser.parse_args()
 
@@ -62,6 +63,7 @@ def main():
         embedding_dim = {"root": emb_arg[0], "form": emb_arg[1], "ext": emb_arg[2], "duration": emb_arg[3], "metrical" : emb_arg[4]} # sum roughtly 1/4 of the hidden size
         use_embeddings = True
         emb_str = f"r{emb_arg[0]}f{emb_arg[0]}e{emb_arg[0]}d{emb_arg[3]}m{emb_arg[4]}"
+    rpr = args.pos_enc == "relative"
 
     print("Starting a new run with the following parameters:")
     print(args)
@@ -73,10 +75,10 @@ def main():
     else:
         pos_weight = 1
     input_dim = embedding_dim["root"] + embedding_dim["form"] + embedding_dim["ext"] + embedding_dim["duration"] + embedding_dim["metrical"] if use_embeddings else 25
-    model = ArcPredictionLightModel(input_dim, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation, use_embeddings=use_embeddings, embedding_dim=embedding_dim, biaffine=biaffine, encoder_type=encoder_type, n_heads=n_heads, data_type="chords" )
+    model = ArcPredictionLightModel(input_dim, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation, use_embeddings=use_embeddings, embedding_dim=embedding_dim, biaffine=biaffine, encoder_type=encoder_type, n_heads=n_heads, data_type="chords", rpr = rpr )
 
     if wandb_log:
-        name = f"{encoder_type}-{n_layers}-{n_hidden}-lr={lr}-wd={weight_decay}-dr={dropout}-act={activation}-emb={emb_str}-aug={data_augmentation}-biaf={biaffine}-heads={n_heads}"        
+        name = f"{encoder_type}-{n_layers}-{n_hidden}-lr={lr}-wd={weight_decay}-dr={dropout}-act={activation}-emb={emb_str}-aug={data_augmentation}-biaf={biaffine}-heads={n_heads}-rpr={rpr}"        
         wandb_logger = WandbLogger(log_model = True, project="Parsing JTB", name= name )
     else:
         wandb_logger = True

@@ -662,6 +662,8 @@ def get_dependency_arcs(ts_xml_file, score, nra_tied):
     ra__untied_fields = list(ra_untied.dtype.names)
     nra_untied = np.hstack([na_untied[ra__untied_fields], ra_untied])
     nra_untied.sort(order="onset_div")
+    # remove grace notes
+    nra_untied = nra_untied[nra_untied["duration_div"] != 0]
     # keep only one rest row if there are consecutive rests, to comply with gttm notation
     # rest_mask = nra_untied["id"].astype('U1') == "r"
     # consecutive_mask = ~np.insert(np.diff(rest_mask), 0, True)
@@ -748,8 +750,8 @@ class JTBDataModule(LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        idxs = range(len(self.dataset))
-        ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
+        idxs = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if p_arcs is not None] # this should correspond to all 150 pieces with trees
+        ts_numerators = [self.dataset.time_signatures[i] for i in idxs]
         train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=ts_numerators)
         val_idx, test_idx = train_test_split(
             valtest_idx, test_size=0.5, random_state=0, stratify=np.array(ts_numerators)[valtest_idx]
@@ -773,7 +775,21 @@ class JTBDataModule(LightningDataModule):
         print(
             f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}"
         )
-        # compute the positive weight to be used to balance the loss
+        # handle the pretraining data
+        no_tree_idx = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if p_arcs is None]
+        self.no_tree_dataset = JTBDatasetAugmented(
+                [self.dataset[i] for i in no_tree_idx],
+                will_use_embeddings=self.dataset.will_use_embeddings,
+            )
+        self.dataset_pretrain = torch.utils.data.ConcatDataset([self.dataset_train, self.no_tree_dataset])
+
+    def pre_train_dataloader(self):
+        return DataLoader(
+            self.dataset_pretrain,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=True,
+        )
 
     def train_dataloader(self):
         return DataLoader(
@@ -800,7 +816,7 @@ class JTBDataModule(LightningDataModule):
 class JTBDataset(Dataset):
     """Dataset for the Jazz treebank."""
 
-    def __init__(self, data_json_file, data_augmentation="no", only_tree = True, tree_type = "complete", n_jobs=4, will_use_embeddings=True):
+    def __init__(self, data_json_file, data_augmentation="no", only_tree = True, tree_type = "complete", n_jobs=4, will_use_embeddings=True, verbose=False):
         """
         Args:
             data_json_file (string): Path to the json file with treebank data.
@@ -822,6 +838,7 @@ class JTBDataset(Dataset):
         self.will_use_embeddings = will_use_embeddings
         self.data_augmentation = data_augmentation
         self.to_augment_dict = {}
+        self.only_tree = only_tree
         # load data
         print("Loading data...")
         with open(str(Path(data_json_file))) as f:
@@ -829,10 +846,13 @@ class JTBDataset(Dataset):
         if only_tree:
             # remove pieces with no tree annotations
             dict_data = [e for e in dict_data if e.get("trees") is not None]
+        else:
+            # build a variable that says if the piece has a tree or not
+            has_tree = [e.get("trees") is not None for e in dict_data]
         if tree_type == "open":
-            tree_dicts = [e["trees"][0]["open_constituent_tree"] for e in dict_data]
+            tree_dicts = [e["trees"][0]["open_constituent_tree"] if e.get("trees") is not None else None for e in dict_data]
         elif tree_type == "complete":
-            tree_dicts = [e["trees"][0]["complete_constituent_tree"] for e in dict_data]
+            tree_dicts = [e["trees"][0]["complete_constituent_tree"] if e.get("trees") is not None else None for e in dict_data ]
 
         self.d_arcs = []
         self.chords_features = []
@@ -841,17 +861,40 @@ class JTBDataset(Dataset):
         self.time_signatures = []
         for i,tree_d in enumerate(tree_dicts):
             ts_dict = dict_data[i]["meter"]
-            self.time_signatures.append((ts_dict["numerator"],ts_dict["denominator"]))
-            d_arc, ch = parse_jht_to_dep_tree(tree_d)
-            d_arc = torch.tensor(d_arc)
-            self.d_arcs.append(d_arc)
-            self.chords_features.append(get_features_from_chord_labels(ch,ts_dict,dict_data[i]["beats"]))
-            cart_prod = torch.cartesian_prod(torch.arange(len(ch)), torch.arange(len(ch)))  # all possible pairs
-            pot_arcs = cart_prod[
-                cart_prod[:, 0] != cart_prod[:, 1]
-            ]  # remove self loops
-            self.pot_arcs.append(pot_arcs)
-            self.truth_masks.append(get_edges_mask(d_arc, pot_arcs))
+            if (only_tree) or has_tree[i] : # if the piece has a tree
+                # compute arcs from the tree
+                d_arc, ch = parse_jht_to_dep_tree(tree_d)
+                d_arc = torch.tensor(d_arc)
+                cart_prod = torch.cartesian_prod(torch.arange(len(ch)), torch.arange(len(ch)))  # all possible pairs
+                pot_arcs = cart_prod[
+                    cart_prod[:, 0] != cart_prod[:, 1]
+                ]  # remove self loops
+                truth_mask = get_edges_mask(d_arc, pot_arcs)
+                # compute chord features
+                chord_feature = get_features_from_chord_labels(ch,ts_dict,dict_data[i]["beats"])
+            else:
+                # we don't have any trees, so arcs will be None
+                d_arc = None
+                pot_arcs = None
+                truth_mask = None
+                ch = dict_data[i]["chords"]
+                # compute chord features
+                try:
+                    chord_feature = get_features_from_chord_labels(ch,ts_dict,dict_data[i]["beats"])
+                except Exception as e:
+                    if verbose:
+                        print("!!! error in piece",i, e)
+                        print("chords",ch)
+                        print("ts",ts_dict)
+                        print("beats",dict_data[i]["beats"])
+                    chord_feature = None
+            if chord_feature is not None: # use only pieces that didn't have errors
+                self.d_arcs.append(d_arc)
+                self.pot_arcs.append(pot_arcs)
+                self.truth_masks.append(truth_mask)
+                self.chords_features.append(chord_feature)
+                self.time_signatures.append((ts_dict["numerator"],ts_dict["denominator"]))
+        print(f"Done loading data. {len(dict_data)-len(self.chords_features)} out of {len(dict_data)} pieces were discarded because of errors.")
 
 
     def __len__(self):
@@ -885,9 +928,10 @@ class JTBDataset(Dataset):
                 )
 
     def get_positive_weight(self):
+        truth_masks_not_none = [t for t in self.truth_masks if t is not None]
         return sum(
-            [len(truth_mask) / torch.sum(truth_mask) for truth_mask in self.truth_masks]
-        ) / len(self.truth_masks)
+            [len(truth_mask) / torch.sum(truth_mask) for truth_mask in truth_masks_not_none]
+        ) / len(truth_masks_not_none)
     
 
 class JTBDatasetAugmented(Dataset):
@@ -1012,3 +1056,98 @@ def get_features_from_chord_labels(chord_labels, time_signature, rel_beats):
         np.array(rel_beats) - 1, total_beat, total_beat
     )
     return np.vstack((root_numbers, chord_forms, chord_extensions, duration_indices, metrical)).T
+
+#################### Pretrained embeddings ####################
+
+
+# class JazzChordDataset(Dataset):
+#     """Dataset for the Jazz Chords."""
+
+#     def __init__(self, data_json_file, data_augmentation="no", only_tree = True, tree_type = "complete", n_jobs=4, will_use_embeddings=True):
+#         """
+#         Args:
+#             data_json_file (string): Path to the json file with treebank data.
+#             data_augmentation (string): One of "no", "online", "preprocess".
+#                 "no" means no data augmentation.
+#                 "online" means data augmentation is done on the fly on the __getitem__.
+#                 "preprocess" means data augmentation is done when loading the dataset.
+#             only_tree (bool): If True, only pieces with trees are kept, otherwise also pieces with only chords.
+#             tree_type (string): One of "open", "complete".
+#             n_jobs (int): Number of processes to use for data augmentation.
+
+#         """
+#         if data_augmentation not in ["no", "online", "preprocess"]:
+#             raise ValueError(
+#                 "data_augmentation must be one of 'no', 'online', 'preprocess'"
+#             )
+#         if tree_type not in ["open", "complete"]:
+#             raise ValueError("tree_type must be one of 'open', 'complete'")
+#         self.will_use_embeddings = will_use_embeddings
+#         self.data_augmentation = data_augmentation
+#         self.to_augment_dict = {}
+#         # load data
+#         print("Loading data...")
+#         with open(str(Path(data_json_file))) as f:
+#             dict_data = json.load(f)
+#         if only_tree:
+#             # remove pieces with no tree annotations
+#             dict_data = [e for e in dict_data if e.get("trees") is not None]
+#         if tree_type == "open":
+#             tree_dicts = [e["trees"][0]["open_constituent_tree"] if e.get("trees") is not None else None for e in dict_data]
+#         elif tree_type == "complete":
+#             tree_dicts = [e["trees"][0]["complete_constituent_tree"] if e.get("trees") is not None else None for e in dict_data ]
+
+#         self.d_arcs = []
+#         self.chords_features = []
+#         self.pot_arcs = []
+#         self.truth_masks = []
+#         self.time_signatures = []
+#         for i,tree_d in enumerate(tree_dicts):
+#             ts_dict = dict_data[i]["meter"]
+#             self.time_signatures.append((ts_dict["numerator"],ts_dict["denominator"]))
+#             d_arc, ch = parse_jht_to_dep_tree(tree_d)
+#             d_arc = torch.tensor(d_arc)
+#             self.d_arcs.append(d_arc)
+#             self.chords_features.append(get_features_from_chord_labels(ch,ts_dict,dict_data[i]["beats"]))
+#             cart_prod = torch.cartesian_prod(torch.arange(len(ch)), torch.arange(len(ch)))  # all possible pairs
+#             pot_arcs = cart_prod[
+#                 cart_prod[:, 0] != cart_prod[:, 1]
+#             ]  # remove self loops
+#             self.pot_arcs.append(pot_arcs)
+#             self.truth_masks.append(get_edges_mask(d_arc, pot_arcs))
+
+
+#     def __len__(self):
+#         return len(self.truth_masks)
+
+#     def __getitem__(self, idx):
+#         # online data augmentation is implemented in getitem
+#         if not self.data_augmentation == "online":
+#             return (
+#                 data_preparation(self.chords_features[idx]),
+#                 self.truth_masks[idx],
+#                 self.pot_arcs[idx],
+#             )
+#         else:
+#             if not self.to_augment_dict[
+#                 idx
+#             ]:  # don't augment, for example for test and validation
+#                 return (
+#                     data_preparation(self.chords_features[idx], self.will_use_embeddings),
+#                     self.truth_masks[idx],
+#                     self.pot_arcs[idx],
+#                 )
+#             else:  # augment
+#                 return (
+#                     data_preparation(
+#                         online_data_augmentation(self.chords_features[idx]),
+#                         self.will_use_embeddings,
+#                     ),
+#                     self.truth_masks[idx],
+#                     self.pot_arcs[idx],
+#                 )
+
+#     def get_positive_weight(self):
+#         return sum(
+#             [len(truth_mask) / torch.sum(truth_mask) for truth_mask in self.truth_masks]
+#         ) / len(self.truth_masks)
