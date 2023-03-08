@@ -751,8 +751,8 @@ class JTBDataModule(LightningDataModule):
 
     def setup(self, stage=None):
         idxs = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if p_arcs is not None] # this should correspond to all 150 pieces with trees
-        ts_numerators = [self.dataset.time_signatures[i] for i in idxs]
-        train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=ts_numerators)
+        ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
+        train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=np.array(ts_numerators)[idxs])
         val_idx, test_idx = train_test_split(
             valtest_idx, test_size=0.5, random_state=0, stratify=np.array(ts_numerators)[valtest_idx]
         )

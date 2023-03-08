@@ -1,0 +1,59 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from musicparser.models import PositionalEncoding, DummyDecoder, TransformerEncoderLayerRPR, TransformerEncoderRPR
+
+class ArcDecoder(torch.nn.Module):
+    def __init__(self, hidden_channels, activation=F.relu, dropout=0.3, biaffine=True):
+        super().__init__()
+        self.activation = activation
+        self.biaffine = biaffine
+        if biaffine:
+            self.lin1 = nn.Linear(hidden_channels, hidden_channels)
+            self.lin2 = nn.Linear(hidden_channels, hidden_channels)
+            # self.bilinear = nn.Bilinear(hidden_channels +1 , hidden_channels + 1, 1)
+            self.bilinear = nn.Bilinear(hidden_channels , hidden_channels, 1)
+        else:
+            self.lin1 = nn.Linear(2*hidden_channels, hidden_channels)
+            self.lin2 = nn.Linear(hidden_channels, 1)
+        self.dropout = nn.Dropout(dropout)
+        self.norm = nn.LayerNorm(hidden_channels)
+        
+
+    def forward(self, z, pot_arcs):
+        z = self.norm(z)
+        if self.biaffine:
+            # get the embeddings of the starting and ending nodes, both of shape (num_pot_arcs, hidden_channels)
+            input1 =  z[pot_arcs[:, 0]]
+            input2 = z[pot_arcs[:, 1]]
+            # pass through a linear layer, shape (num_pot_arcs, hidden_channels)
+            input1 = self.lin1(input1)
+            input2 = self.lin2(input2)
+            # pass through an activation function, shape (num_pot_arcs, hidden_channels)
+            input1 = self.activation(input1)
+            input2 = self.activation(input2)
+            # normalize
+            input1 = self.norm(input1)
+            input2 = self.norm(input2)
+            # pass through a dropout layer, shape (num_pot_arcs, hidden_channels)
+            input1 = self.dropout(input1)
+            input2 = self.dropout(input2)
+            # # concatenate, like it is done in the stanza parser
+            # input1 =  torch.cat((input1, torch.ones((input1.shape[0],1), device = input1.device)), dim = -1)
+            # input2 = torch.cat((input2, torch.ones((input1.shape[0],1), device = input1.device)), dim = -1)
+            z = self.bilinear(input1, input2)
+        else:
+            # concat the embeddings of the two nodes, shape (num_pot_arcs, 2*hidden_channels)
+            z = torch.cat([z[pot_arcs[:, 0]], z[pot_arcs[:, 1]]], dim=-1)
+            # pass through a linear layer, shape (num_pot_arcs, hidden_channels)
+            z = self.lin1(z)
+            # pass through activation, shape (num_pot_arcs, hidden_channels)
+            z = self.activation(z)
+            # normalize
+            z = self.norm(z)
+            # dropout
+            z = self.dropout(z)
+            # pass through another linear layer, shape (num_pot_arcs, 1)
+            z = self.lin2(z)
+        # return a vector of shape (num_pot_arcs,)
+        return z.view(-1)

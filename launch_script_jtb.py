@@ -1,7 +1,7 @@
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, seed_everything
 import torch
 import random
 import argparse
@@ -14,9 +14,10 @@ from musicparser.models import ArcPredictionLightModel
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 # for repeatability
-torch.manual_seed(0)
-random.seed(0)
-torch.use_deterministic_algorithms(True)
+# torch.manual_seed(0)
+# random.seed(0)
+# torch.use_deterministic_algorithms(True)
+seed_everything(0,workers=True)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -90,7 +91,7 @@ def main():
         num_sanity_val_steps=1,
         logger=wandb_logger,
         callbacks=[checkpoint_callback, early_stop_callback],
-        auto_lr_find=True,
+        deterministic=True
         )
 
     # trainer.tune(model, datamodule=datamodule)

@@ -1,7 +1,7 @@
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, seed_everything
 import torch
 import random
 import argparse
@@ -14,9 +14,10 @@ from musicparser.models import ArcPredictionLightModel
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 # for repeatability
-torch.manual_seed(0)
-random.seed(0)
-torch.use_deterministic_algorithms(True)
+# torch.manual_seed(0)
+# random.seed(0)
+# torch.use_deterministic_algorithms(True)
+seed_everything(0,workers=True)
 
 def main():
     parser = argparse.ArgumentParser()
@@ -32,11 +33,12 @@ def main():
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--data_augmentation", type=str, default="preprocess", help="'preprocess', 'no', or 'online'")
     parser.add_argument("--biaffine", action="store_true", help="Use biaffine arc decoder.")
-    parser.add_argument('--encoder_type', type=str, default="rnn", help="'rnn', or 'transformer'")
+    parser.add_argument('--encoder_type', type=str, default="transformer", help="'rnn', or 'transformer'")
     parser.add_argument("--embeddings", type=str, default="[12,4,4,4,4]")
     parser.add_argument('--n_heads', type=int, default=4)
     parser.add_argument('--pos_enc', type= str, default="relative", help="'absolute', or 'relative'" )
     parser.add_argument('--pretrain', type= str, default="True", help="'True', or 'False'" )
+    parser.add_argument('--sum')
 
     args = parser.parse_args()
 
@@ -77,7 +79,7 @@ def main():
     else:
         pos_weight = 1
     input_dim = embedding_dim["root"] + embedding_dim["form"] + embedding_dim["ext"] + embedding_dim["duration"] + embedding_dim["metrical"] if use_embeddings else 25
-    model = ArcPredictionLightModel(input_dim, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation, use_embeddings=use_embeddings, embedding_dim=embedding_dim, biaffine=biaffine, encoder_type=encoder_type, n_heads=n_heads, data_type="chords", rpr = rpr )
+    model = ArcPredictionLightModel(input_dim, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation, use_embeddings=use_embeddings, embedding_dim=embedding_dim, biaffine=biaffine, encoder_type=encoder_type, n_heads=n_heads, data_type="chords", rpr = rpr, pretrain_mode= True )
 
     if wandb_log:
         name = f"{encoder_type}-{n_layers}-{n_hidden}-lr={lr}-wd={weight_decay}-dr={dropout}-act={activation}-emb={emb_str}-aug={data_augmentation}-biaf={biaffine}-heads={n_heads}-rpr={rpr}"        
@@ -85,19 +87,19 @@ def main():
     else:
         wandb_logger = True
 
-    # checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_fscore_postp", mode="max")
-    # early_stop_callback = EarlyStopping(monitor="val_fscore_postp", min_delta=0.00, patience=patience, verbose=True, mode="max")
-    # trainer = Trainer(
-    #     max_epochs=200, accelerator="auto", devices= devices, #strategy="ddp",
-    #     num_sanity_val_steps=1,
-    #     logger=wandb_logger,
-    #     callbacks=[checkpoint_callback, early_stop_callback],
-    #     auto_lr_find=True,
-    #     )
+    checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_fscore_postp", mode="max")
+    early_stop_callback = EarlyStopping(monitor="val_fscore_postp", min_delta=0.00, patience=patience, verbose=True, mode="max")
+    trainer = Trainer(
+        max_epochs=200, accelerator="auto", devices= devices, #strategy="ddp",
+        num_sanity_val_steps=1,
+        logger=wandb_logger,
+        # callbacks=[checkpoint_callback, early_stop_callback],
+        deterministic=True
+        )
 
     # # trainer.tune(model, datamodule=datamodule)
     # # print("LR set to", model.lr)
-    # trainer.fit(model, datamodule)
+    trainer.fit(model, datamodule)
     # trainer.test(model, datamodule)
 
 
