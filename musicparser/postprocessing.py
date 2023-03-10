@@ -39,7 +39,7 @@ def dtree2unlabeled_ctree(d_arcs):
     # find root
     head_noted = [arc[0] for arc in d_arcs]
     dependent_nodes = [arc[1] for arc in d_arcs]
-    potential_roots = [k for k in head_noted if k not in dependent_nodes]
+    potential_roots = np.unique([k for k in head_noted if k not in dependent_nodes])
     assert(len(potential_roots) == 1)
     root = potential_roots[0]
     # build ctree
