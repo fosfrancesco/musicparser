@@ -358,7 +358,7 @@ def get_edges_mask(
     if check_strict_subset:
         dropped_edges = subset_edges[(~np.isin(view_subset, view_total))]
         assert len(dropped_edges) == 0
-    return torch.from_numpy(np.isin(view_total, view_subset)).squeeze()
+    return torch.from_numpy(np.isin(view_total, view_subset)).squeeze().bool()
 
 
 def get_score_path(folder):
@@ -750,7 +750,7 @@ class JTBDataModule(LightningDataModule):
         pass
 
     def setup(self, stage=None):
-        idxs = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if p_arcs is not None] # this should correspond to all 150 pieces with trees
+        idxs = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if len(p_arcs)!=0] # this should correspond to all 150 pieces with trees
         ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
         train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=np.array(ts_numerators)[idxs])
         val_idx, test_idx = train_test_split(
@@ -771,17 +771,20 @@ class JTBDataModule(LightningDataModule):
             self.dataset.to_augment_dict = to_aug_dict
         self.dataset_val = torch.utils.data.Subset(self.dataset, val_idx)
         self.dataset_test = torch.utils.data.Subset(self.dataset, test_idx)
-        # self.dataset_predict = self.dataset[test_idx[:5]]
-        print(
-            f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}"
-        )
         # handle the pretraining data
-        no_tree_idx = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if p_arcs is None]
+        no_tree_idx = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if len(p_arcs) == 0]
         self.no_tree_dataset = JTBDatasetAugmented(
                 [self.dataset[i] for i in no_tree_idx],
                 will_use_embeddings=self.dataset.will_use_embeddings,
             )
         self.dataset_pretrain = torch.utils.data.ConcatDataset([self.dataset_train, self.no_tree_dataset])
+        print(
+            f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}"
+        )
+        if len(self.no_tree_dataset) > 0:
+            print(f"Pretrain size :{len(self.dataset_pretrain)}")
+        else:
+            print("No pretraining data")
 
     def pre_train_dataloader(self):
         return DataLoader(
@@ -849,6 +852,8 @@ class JTBDataset(Dataset):
         else:
             # build a variable that says if the piece has a tree or not
             has_tree = [e.get("trees") is not None for e in dict_data]
+
+        # get the selected kind of tree
         if tree_type == "open":
             tree_dicts = [e["trees"][0]["open_constituent_tree"] if e.get("trees") is not None else None for e in dict_data]
         elif tree_type == "complete":
@@ -859,6 +864,7 @@ class JTBDataset(Dataset):
         self.pot_arcs = []
         self.truth_masks = []
         self.time_signatures = []
+        self.titles = []
         for i,tree_d in enumerate(tree_dicts):
             ts_dict = dict_data[i]["meter"]
             if (only_tree) or has_tree[i] : # if the piece has a tree
@@ -874,9 +880,9 @@ class JTBDataset(Dataset):
                 chord_feature = get_features_from_chord_labels(ch,ts_dict,dict_data[i]["beats"])
             else:
                 # we don't have any trees, so arcs will be None
-                d_arc = None
-                pot_arcs = None
-                truth_mask = None
+                d_arc = torch.tensor([])
+                pot_arcs = torch.tensor([])
+                truth_mask = torch.tensor([])
                 ch = dict_data[i]["chords"]
                 # compute chord features
                 try:
@@ -894,6 +900,7 @@ class JTBDataset(Dataset):
                 self.truth_masks.append(truth_mask)
                 self.chords_features.append(chord_feature)
                 self.time_signatures.append((ts_dict["numerator"],ts_dict["denominator"]))
+                self.titles.append(dict_data[i]["title"])
         print(f"Done loading data. {len(dict_data)-len(self.chords_features)} out of {len(dict_data)} pieces were discarded because of errors.")
 
 
@@ -928,10 +935,10 @@ class JTBDataset(Dataset):
                 )
 
     def get_positive_weight(self):
-        truth_masks_not_none = [t for t in self.truth_masks if t is not None]
+        truth_masks_not_empty = [t for t in self.truth_masks if len(t) > 0]
         return sum(
-            [len(truth_mask) / torch.sum(truth_mask) for truth_mask in truth_masks_not_none]
-        ) / len(truth_masks_not_none)
+            [len(truth_mask) / torch.sum(truth_mask) for truth_mask in truth_masks_not_empty]
+        ) / len(truth_masks_not_empty)
     
 
 class JTBDatasetAugmented(Dataset):

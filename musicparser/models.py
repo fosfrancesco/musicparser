@@ -50,7 +50,7 @@ class ArcPredictionLightModel(LightningModule):
             data_type,
             rpr,
             pretrain_mode
-        ).double()
+        )
         pos_weight = 1 if pos_weight is None else pos_weight
         self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
         self.val_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
@@ -61,9 +61,11 @@ class ArcPredictionLightModel(LightningModule):
         self.test_f1score_postp = BinaryF1Score()
         self.pretrain_mode = pretrain_mode
         if pretrain_mode:
-            self.pre_train_loss = nn.ModuleDict({"root": CrossEntropyLoss(), "form": CrossEntropyLoss(), "ext": CrossEntropyLoss(), "dur": CrossEntropyLoss(), "met": CrossEntropyLoss()})
+            # self.pre_train_loss = nn.ModuleDict({"root": CrossEntropyLoss(), "form": CrossEntropyLoss(), "ext": CrossEntropyLoss(), "dur": CrossEntropyLoss(), "met": CrossEntropyLoss()})
+            self.pre_train_loss = CrossEntropyLoss()
             self.pre_train_accuracy = nn.ModuleDict({"root": MulticlassAccuracy(12), "form": MulticlassAccuracy(len(CHORD_FORM)), "ext": MulticlassAccuracy(len(CHORD_EXTENSION)), "dur": MulticlassAccuracy(len(JTB_DURATION)), "met": MulticlassAccuracy(METRICAL_LEVELS)})
-            self.pre_val_loss = nn.ModuleDict({"root": CrossEntropyLoss(), "form": CrossEntropyLoss(), "ext": CrossEntropyLoss(), "dur": CrossEntropyLoss(), "met": CrossEntropyLoss()})
+            # self.pre_val_loss = nn.ModuleDict({"root": CrossEntropyLoss(), "form": CrossEntropyLoss(), "ext": CrossEntropyLoss(), "dur": CrossEntropyLoss(), "met": CrossEntropyLoss()})
+            self.pre_val_loss = CrossEntropyLoss()
             self.pre_val_accuracy = nn.ModuleDict({"root": MulticlassAccuracy(12), "form": MulticlassAccuracy(len(CHORD_FORM)), "ext": MulticlassAccuracy(len(CHORD_EXTENSION)), "dur": MulticlassAccuracy(len(JTB_DURATION)), "met": MulticlassAccuracy(METRICAL_LEVELS)})
 
     def training_step(self, batch, batch_idx):
@@ -85,14 +87,15 @@ class ArcPredictionLightModel(LightningModule):
             loss = 0
             accuracy = 0
             for i,key in enumerate(pred_logits.keys()):
-                loss+= self.pre_train_loss[key](pred_logits[key], expected[:,i].long())
+                loss+= self.pre_train_loss(pred_logits[key], expected[:,i].long())
                 # self.log(f"train_loss_{key}", loss.item(), prog_bar=True, on_step=True, on_epoch=True, batch_size=1)
                 accuracy += self.pre_train_accuracy[key](pred_logits[key], expected[:,i].long())
                 # self.log(f"train_acc_{key}", acc.item(), prog_bar=True, on_step=True, on_epoch=True, batch_size=1)
-            loss = loss/len(pred_logits.keys())
+            # loss = loss/len(pred_logits.keys())
             accuracy = accuracy/len(pred_logits.keys())
             self.log("pre_train_loss", loss.item(), prog_bar=True, on_step=True, on_epoch=True, batch_size=1)
             self.log("pre_train_acc", accuracy.item(), prog_bar=True, on_step=True, on_epoch=True, batch_size=1)
+            return loss
 
 
     def validation_step(self, batch, batch_idx):
@@ -111,7 +114,7 @@ class ArcPredictionLightModel(LightningModule):
                 adj_pred = pyg.utils.to_dense_adj(pred_arc.T, max_num_nodes=num_notes).squeeze().cpu()
             else: # to avoid exception in to_dense_adj when there is no predicted edge
                 adj_pred = torch.zeros((num_notes, num_notes)).squeeze().to(self.device).cpu()
-            # compute loss and F1 score
+            ## compute loss and F1 score
             adj_target = pyg.utils.to_dense_adj(pot_arcs[truth_arcs_mask].T, max_num_nodes=num_notes).squeeze().long().cpu()
             val_fscore = self.val_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
             self.log("val_fscore", val_fscore.item(), prog_bar=True, batch_size=1)
@@ -148,14 +151,14 @@ class ArcPredictionLightModel(LightningModule):
             loss = 0
             accuracy = 0
             for i,key in enumerate(pred_logits.keys()):
-                loss+= self.pre_train_loss[key](pred_logits[key], expected[:,i].long())
+                loss+= self.pre_train_loss(pred_logits[key], expected[:,i].long())
                 # self.log(f"train_loss_{key}", loss.item(), prog_bar=True, on_step=True, on_epoch=True, batch_size=1)
                 accuracy += self.pre_train_accuracy[key](pred_logits[key], expected[:,i].long())
                 # self.log(f"train_acc_{key}", acc.item(), prog_bar=True, on_step=True, on_epoch=True, batch_size=1)
-            loss = loss/len(pred_logits.keys())
+            # loss = loss/len(pred_logits.keys())
             accuracy = accuracy/len(pred_logits.keys())
-            self.log("pre_train_loss", loss.item(), prog_bar=True, on_step=True, on_epoch=True, batch_size=1)
-            self.log("pre_train_acc", accuracy.item(), prog_bar=True, on_step=True, on_epoch=True, batch_size=1)
+            self.log("pre_val_loss", loss.item(), prog_bar=True, on_epoch=True, batch_size=1)
+            self.log("pre_val_acc", accuracy.item(), prog_bar=True, on_epoch=True, batch_size=1)
 
     
     def test_step(self, batch, batch_idx):
@@ -170,7 +173,7 @@ class ArcPredictionLightModel(LightningModule):
             adj_pred = pyg.utils.to_dense_adj(pred_arc.T, max_num_nodes=num_notes).squeeze().cpu()
         else: # to avoid exception in to_dense_adj when there is no predicted edge
             adj_pred = torch.zeros((num_notes, num_notes)).squeeze().to(self.device).cpu()
-        # compute loss and F1 score
+        ## compute loss and F1 score
         adj_target = pyg.utils.to_dense_adj(pot_arcs[truth_arcs_mask].T, max_num_nodes=num_notes).squeeze().long().cpu()
         test_fscore = self.test_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
         self.log("test_fscore", test_fscore.item(), prog_bar=True, batch_size=1)
@@ -229,27 +232,27 @@ class TransformerEncoder(torch.nn.Module):
         self.positional_encoder = PositionalEncoding(
             d_model=input_dim, dropout=dropout, max_len=200
         )
-        self.dummy = DummyDecoder()
+        # self.dummy = DummyDecoder()
         if not rpr: # normal transformer with absolute positional representation
             # To make a decoder-only transformer we need to use masked encoder layers
             # Dummy decoder to essentially just return the encoder output
-            self.transformer = nn.Transformer(
-                d_model=input_dim, nhead=n_heads, num_encoder_layers=encoder_depth,
-                num_decoder_layers=0, dropout=dropout, activation=activation,
-                dim_feedforward=hidden_dim, custom_decoder=self.dummy
-            )
-            # encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, dim_feedforward=hidden_dim, nhead=n_heads, dropout =dropout, activation=activation)
-            # encoder_norm = nn.LayerNorm(input_dim)
-            # self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=encoder_depth, norm=encoder_norm)
+            # self.transformer = nn.Transformer(
+            #     d_model=input_dim, nhead=n_heads, num_encoder_layers=encoder_depth,
+            #     num_decoder_layers=0, dropout=dropout, activation=activation,
+            #     dim_feedforward=hidden_dim, custom_decoder=self.dummy
+            # )
+            encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, dim_feedforward=hidden_dim, nhead=n_heads, dropout =dropout, activation=activation)
+            encoder_norm = nn.LayerNorm(input_dim)
+            self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=encoder_depth, norm=encoder_norm)
         else: # relative positional representation
             encoder_norm = nn.LayerNorm(input_dim)
-            encoder_layer = TransformerEncoderLayerRPR(input_dim, n_heads, hidden_dim, dropout, er_len=200)
-            encoder = TransformerEncoderRPR(encoder_layer, encoder_depth, encoder_norm)
-            self.transformer = nn.Transformer(
-                d_model=input_dim, nhead=n_heads, num_encoder_layers=encoder_depth,
-                num_decoder_layers=0, dropout=dropout, activation=activation,
-                dim_feedforward=hidden_dim, custom_decoder=self.dummy, custom_encoder=encoder
-            )
+            encoder_layer = TransformerEncoderLayerRPR(input_dim, n_heads, hidden_dim, dropout, activation=activation, er_len=200)
+            self.transformer_encoder = TransformerEncoderRPR(encoder_layer, encoder_depth, encoder_norm)
+            # self.transformer = nn.Transformer(
+            #     d_model=input_dim, nhead=n_heads, num_encoder_layers=encoder_depth,
+            #     num_decoder_layers=0, dropout=dropout, activation=activation,
+            #     dim_feedforward=hidden_dim, custom_decoder=self.dummy, custom_encoder=encoder
+            # )
 
     def forward(self, z, src_mask=None):
         # TODO: why this is rescaled like that?
@@ -260,7 +263,7 @@ class TransformerEncoder(torch.nn.Module):
         # run transformer encoder
         # Since there are no true decoder layers, the tgt is unused
         # Pytorch wants src and tgt to have some equal dims however
-        z = self.transformer(src=z, tgt=z, src_mask=src_mask)
+        z = self.transformer_encoder(src=z, mask=src_mask)
         # remove batch dim
         z = torch.squeeze(z, dim=1)
         return z, ""
@@ -409,7 +412,7 @@ class NotesEncoder(torch.nn.Module):
                     z = root + form + ext + duration + metrical
         else:
             # one hot encoding
-            z = get_feats_one_hot(sequence).double()
+            z = get_feats_one_hot(sequence)
 
         if mask is None:
             z, _ = self.encoder_cell(z)

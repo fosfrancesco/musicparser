@@ -56,9 +56,10 @@ class TransformerEncoderLayerRPR(Module):
     ----------
     """
 
-    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, er_len=None):
+    def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, activation = F.relu, er_len=None):
         super(TransformerEncoderLayerRPR, self).__init__()
         self.self_attn = MultiheadAttentionRPR(d_model, nhead, dropout=dropout, er_len=er_len)
+        self.activation = activation
         # Implementation of Feedforward model
         self.linear1 = Linear(d_model, dim_feedforward)
         self.dropout = Dropout(dropout)
@@ -74,7 +75,7 @@ class TransformerEncoderLayerRPR(Module):
                               key_padding_mask=src_key_padding_mask)[0]
         src = src + self.dropout1(src2)
         src = self.norm1(src)
-        src2 = self.linear2(self.dropout(F.relu(self.linear1(src))))
+        src2 = self.linear2(self.dropout(self.activation(self.linear1(src))))
         src = src + self.dropout2(src2)
         src = self.norm2(src)
         return src

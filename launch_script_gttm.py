@@ -95,7 +95,7 @@ def main():
         callbacks=[checkpoint_callback, early_stop_callback],
         deterministic=True
         )
-
+    # pretrain on the big dataset
     trainer.fit(model, datamodule)
     trainer.test(model, datamodule)
 

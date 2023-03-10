@@ -1,6 +1,116 @@
-# Adapted from the stanza parser https://github.com/stanfordnlp/stanza/blob/b18e6e80fae7cefbfed7e5255c7ba4ef6f1adae5/stanza/models/common/chuliu_edmonds.py
+
 
 import numpy as np
+from collections import defaultdict
+import re
+
+
+############### From d_tree to c_tree ####################
+
+class Node:
+    def __init__(self,label):
+        self.label = label
+        self.children = []
+
+    def add_child(self, node):
+        self.children.append(node)
+
+    def set_children(self, node1, node2):
+        self.children = [node1, node2]
+
+    def unlabeled_repr(self):
+        if len(self.children) == 0:
+            return self.label
+        else:
+            return [self.children[0].unlabeled_repr(),self.children[1].unlabeled_repr()]
+
+    def __str__(self):
+        return f"N{self.label}"
+
+
+def dtree2unlabeled_ctree(d_arcs):
+    # build head dictionary
+    d = defaultdict(list)
+    for arc in d_arcs:
+        d[arc[0]].append(arc[1])
+    # ensure the lists in the dictionary are sorted
+    for v in d.values():
+        v.sort()
+    # find root
+    head_noted = [arc[0] for arc in d_arcs]
+    dependent_nodes = [arc[1] for arc in d_arcs]
+    potential_roots = [k for k in head_noted if k not in dependent_nodes]
+    assert(len(potential_roots) == 1)
+    root = potential_roots[0]
+    # build ctree
+    node_root = Node(root)
+
+    def _recursive_topdown_build(d, node):
+        # stopping condition
+        if node.label not in d or len(d[node.label]) == 0:
+            return
+        else:
+        # the indices of dependent will be all smaller or all bigger than root, so we can check the first one
+            if d[node.label][0] > root: # dependent on the right
+                left_node_child = Node(node.label)
+                right_node_child = Node(d[node.label][-1])
+                # remove the value from the list
+                d[node.label].pop()
+            else:
+                left_node_child = Node(d[node.label][0])
+                right_node_child = Node(node.label)
+                # remove the value from the list
+                d[node.label].pop(0)
+            # set childrens and iterate on them
+            node.set_children(left_node_child, right_node_child)
+            _recursive_topdown_build(d, left_node_child)
+            _recursive_topdown_build(d, right_node_child)
+    
+        
+    _recursive_topdown_build(d, node_root)
+    return node_root
+
+
+############### Evaluation of c_tree ####################
+
+def get_all_spans(tree):
+    all_spans = []
+    def _recursive_get_all_spans(node):
+        # if node is a leaf, end recursion
+        if type(node) != list:
+            return 
+        else:
+            # we traverse tree1, and match string with tree2             
+            for child in node:
+                _recursive_get_all_spans(child)
+            # add information of the current node
+            # compute the span of the subtree rooted at the current node
+            digits = [i for i in re.split(r'(\D+)', str(node)) if i.isdigit()]
+            spans = (digits[0], digits[-1])
+            all_spans.append(spans)
+        
+    _recursive_get_all_spans(tree)
+    return all_spans
+
+def ctree_span_similarity(truth, pred, return_intersection=False):
+    # compute all spans of truth and pred
+    spans_truth = get_all_spans(truth)
+    spans_pred = get_all_spans(pred)
+    
+    # find matching spans
+    set_span_pred = set(spans_pred) # for computational reason, faster if it's a set
+    intersection = [span for span in spans_truth if span in set_span_pred]
+    
+    if return_intersection:
+        return len(intersection)/len(spans_truth), intersection
+    else:
+        return len(intersection)/len(spans_truth)
+
+
+
+############### MST algorithm for directed graphs ####################
+# Adapted from the stanza parser 
+# https://github.com/stanfordnlp/stanza/blob/b18e6e80fae7cefbfed7e5255c7ba4ef6f1adae5/stanza/models/common/chuliu_edmonds.py
 
 def tarjan(tree):
     """"""
