@@ -8,7 +8,7 @@ from torchmetrics.classification import BinaryF1Score, BinaryAccuracy, Multiclas
 import numpy as np
 
 from musicparser.rpr import TransformerEncoderLayerRPR, TransformerEncoderRPR, DummyDecoder
-from musicparser.postprocessing import chuliu_edmonds_one_root, dtree2unlabeled_ctree, ctree_span_similarity
+from musicparser.postprocessing import chuliu_edmonds_one_root, dtree2unlabeled_ctree, ctree_span_similarity, eisner
 from musicparser.data_loading import DURATIONS, get_feats_one_hot, METRICAL_LEVELS, NUMBER_OF_PITCHES, CHORD_FORM, CHORD_EXTENSION, JTB_DURATION
 
 
@@ -185,7 +185,8 @@ class ArcPredictionLightModel(LightningModule):
         # transpose to have an adjency matrix with edges pointing toward the parent node and take log probs
         adj_pred_log_probs_transp_root = np.log(adj_pred_probs_root.T)
         # postprocess with chu-liu edmonds algorithm
-        head_seq = chuliu_edmonds_one_root(adj_pred_log_probs_transp_root)
+        # head_seq = chuliu_edmonds_one_root(adj_pred_log_probs_transp_root)
+        head_seq = eisner(adj_pred_log_probs_transp_root.T)
         head_seq = head_seq[1:] # remove the root
         # structure the postprocess results in an adjency matrix with edges that point toward the child node
         adj_pred_postp = torch.zeros((num_notes,num_notes))
@@ -212,10 +213,10 @@ class ArcPredictionLightModel(LightningModule):
         # add a new upper row and left column for the root to the adjency matrix
         adj_pred_probs_root = np.vstack((np.zeros((1, num_notes)), adj_pred_probs))
         adj_pred_probs_root = np.hstack((np.zeros((num_notes+1, 1)), adj_pred_probs_root))
-        # transpose to have an adjency matrix with edges pointing toward the parent node and take log probs
-        adj_pred_log_probs_transp_root = np.log(adj_pred_probs_root.T)
-        # postprocess with chu-liu edmonds algorithm
-        head_seq = chuliu_edmonds_one_root(adj_pred_log_probs_transp_root)
+        # take log probs
+        adj_pred_log_probs_root = np.log(adj_pred_probs_root)
+        # postprocess with eisner algorithm
+        head_seq = eisner(adj_pred_log_probs_root)
         head_seq = head_seq[1:] # remove the root
         # rebuild the list of arcs
         pred_arc_postp = []
@@ -232,6 +233,8 @@ class ArcPredictionLightModel(LightningModule):
         # compute c_tree similarity
         ctree_sim = ctree_span_similarity(truth_ctree, pred_ctree)
         print("c_tree_span_similarity", ctree_sim)
+        print(pred_ctree)
+        print(truth_ctree)
 
 
 

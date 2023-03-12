@@ -36,4 +36,5 @@ trainer = Trainer(
 
 # trainer.tune(model, datamodule=datamodule)
 # print("LR set to", model.lr)
+trainer.test(model,datamodule)
 trainer.predict(model, dataloaders=datamodule.test_dataloader())
