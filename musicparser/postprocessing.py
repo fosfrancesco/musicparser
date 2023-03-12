@@ -25,7 +25,7 @@ class Node:
             return [self.children[0].unlabeled_repr(),self.children[1].unlabeled_repr()]
 
     def __str__(self):
-        return f"N{self.label}"
+        return str(self.unlabeled_repr())
 
 
 def dtree2unlabeled_ctree(d_arcs):
@@ -77,11 +77,11 @@ def get_all_spans(tree):
     all_spans = []
     def _recursive_get_all_spans(node):
         # if node is a leaf, end recursion
-        if type(node) != list:
+        if len(node.children) == 0:
             return 
         else:
             # we traverse tree1, and match string with tree2             
-            for child in node:
+            for child in node.children:
                 _recursive_get_all_spans(child)
             # add information of the current node
             # compute the span of the subtree rooted at the current node

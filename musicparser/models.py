@@ -8,7 +8,7 @@ from torchmetrics.classification import BinaryF1Score, BinaryAccuracy, Multiclas
 import numpy as np
 
 from musicparser.rpr import TransformerEncoderLayerRPR, TransformerEncoderRPR, DummyDecoder
-from musicparser.postprocessing import chuliu_edmonds_one_root
+from musicparser.postprocessing import chuliu_edmonds_one_root, dtree2unlabeled_ctree, ctree_span_similarity
 from musicparser.data_loading import DURATIONS, get_feats_one_hot, METRICAL_LEVELS, NUMBER_OF_PITCHES, CHORD_FORM, CHORD_EXTENSION, JTB_DURATION
 
 
@@ -198,6 +198,43 @@ class ArcPredictionLightModel(LightningModule):
         test_fscore_postp = self.test_f1score_postp.cpu()(adj_pred_postp.flatten(), adj_target.flatten())
         self.log("test_fscore_postp", test_fscore_postp.item(), prog_bar=True, batch_size=1)
 
+    
+    def predict_step(self, batch, batch_idx):
+        note_seq, truth_arcs_mask, pot_arcs = batch
+        note_seq, truth_arcs_mask, pot_arcs = note_seq[0], truth_arcs_mask[0], pot_arcs[0]
+        num_notes = len(note_seq)
+        arc_pred_mask_logits = self.module(note_seq, pot_arcs)
+        arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
+        # pred_arc = pot_arcs[torch.round(arc_pred__mask_normalized).squeeze().bool()].cpu()
+        truth_arc = pot_arcs[truth_arcs_mask.bool()].cpu().tolist()
+        ## postprocess with chuliu edmonds algorithm
+        adj_pred_probs = torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).cpu().to_dense().numpy()
+        # add a new upper row and left column for the root to the adjency matrix
+        adj_pred_probs_root = np.vstack((np.zeros((1, num_notes)), adj_pred_probs))
+        adj_pred_probs_root = np.hstack((np.zeros((num_notes+1, 1)), adj_pred_probs_root))
+        # transpose to have an adjency matrix with edges pointing toward the parent node and take log probs
+        adj_pred_log_probs_transp_root = np.log(adj_pred_probs_root.T)
+        # postprocess with chu-liu edmonds algorithm
+        head_seq = chuliu_edmonds_one_root(adj_pred_log_probs_transp_root)
+        head_seq = head_seq[1:] # remove the root
+        # rebuild the list of arcs
+        pred_arc_postp = []
+        for i, head in enumerate(head_seq):
+            if head != 0:
+                # id is index in note list + 1
+                pred_arc_postp.append((head-1, i))
+            else: #handle the root
+                root = i
+
+        # compute the c_tree for the pred_arc and truth_arc
+        pred_ctree = dtree2unlabeled_ctree(pred_arc_postp)
+        truth_ctree = dtree2unlabeled_ctree(truth_arc)
+        # compute c_tree similarity
+        ctree_sim = ctree_span_similarity(truth_ctree, pred_ctree)
+        print("c_tree_span_similarity", ctree_sim)
+
+
+
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
@@ -206,7 +243,7 @@ class ArcPredictionLightModel(LightningModule):
         return {
             "optimizer": optimizer,
             # "lr_scheduler": scheduler,
-            "monitor": "val_loss"
+            # "monitor": "val_loss"
         }
 
 
