@@ -206,6 +206,7 @@ class TSDataset(Dataset):
         self.pot_arcs = dict_of_lists["pot_arcs"]
         self.truth_masks = dict_of_lists["truth_mask"]
         self.time_signatures = dict_of_lists["time_signature"]
+        self.head_seqs = dict_of_lists["head_seq"]
 
     def _process_score(self, title, score_file, ts_xml_file):
         try:
@@ -225,13 +226,16 @@ class TSDataset(Dataset):
             pot_arcs = pot_arcs[~np.logical_or(starting_rest_mask, ending_rest_mask)]
             # compute the ground truth mask over the pot arcs
             truth_mask = get_edges_mask(d_arc, pot_arcs)
+            # compute the head sequence
+            head_seq = get_head_seq(d_arc, num_notes=len(n_feat))
             # add everything to the dataset
             return {"score_file" : score_file, 
                     "n_feat" : n_feat, 
                     "d_arc" : d_arc , 
                     "pot_arcs" : pot_arcs, 
                     "truth_mask" : truth_mask,
-                    "time_signature" : time_signature}
+                    "time_signature" : time_signature,
+                    "head_seq" : head_seq}
         except Exception as e:
             print(f"!!!!! Error with {title}", e)
             return None
@@ -246,6 +250,7 @@ class TSDataset(Dataset):
                 data_preparation(self.note_features[idx], self.will_use_embeddings),
                 self.truth_masks[idx],
                 self.pot_arcs[idx],
+                self.head_seqs[idx],
             )
         else:
             if not self.to_augment_dict[
@@ -255,6 +260,7 @@ class TSDataset(Dataset):
                     data_preparation(self.note_features[idx], self.will_use_embeddings),
                     self.truth_masks[idx],
                     self.pot_arcs[idx],
+                    self.head_seqs[idx],
                 )
             else:  # augment
                 return (
@@ -264,6 +270,7 @@ class TSDataset(Dataset):
                     ),
                     self.truth_masks[idx],
                     self.pot_arcs[idx],
+                    self.head_seqs[idx],
                 )
 
     def get_positive_weight(self):
@@ -286,8 +293,9 @@ class TSDatasetAugmented(Dataset):
         self.aug_truth_masks = []
         self.aug_pot_arcs = []
         self.aug_score_files = []
+        self.aug_head_seqs = []
         print("Augmenting data...")
-        for n_feat, t_mask, p_arc in pieces:
+        for n_feat, t_mask, p_arc, h_seq in pieces:
             for transp_int in range(-12, 13):
                 n_feat_transp = n_feat.clone()
                 rest_mask = n_feat[:, 1] == 0  # this is to not transpose rests
@@ -299,6 +307,7 @@ class TSDatasetAugmented(Dataset):
                 self.aug_note_features.append(n_feat_transp)
                 self.aug_pot_arcs.append(p_arc)
                 self.aug_truth_masks.append(t_mask)
+                self.aug_head_seqs.append(h_seq)
                 assert torch.all(n_feat_transp >= 0)
 
     def __len__(self):
@@ -309,6 +318,7 @@ class TSDatasetAugmented(Dataset):
             data_preparation(self.aug_note_features[idx], self.will_use_embeddings),
             self.aug_truth_masks[idx],
             self.aug_pot_arcs[idx],
+            self.aug_head_seqs[idx],
         )
 
 
@@ -724,6 +734,25 @@ def get_nra(score):
     return nra
 
 
+def get_head_seq(dep_arcs, num_notes):
+    """Get the head sequence from the dependency arcs.
+    Parameters
+    ----------
+    dep_arcs : torch.tensor of shape (num_notes,2)
+        Dependency arcs.
+    Returns
+    -------
+    head_seq : torch.tensor of shape (num_notes,)
+        Head sequence.
+    """
+    head_seq = torch.zeros(num_notes) - 1 # initialize at -1 to check for errors. Last note) node to have -1 is the root
+    torch.sort
+    for i, (start, end) in enumerate(dep_arcs):
+        assert(head_seq[end] == -1)
+        head_seq[end] = start
+    return torch.concatenate((torch.tensor([0]), head_seq + 1)) # add 1 to shift everything. 0 is then for the root
+
+
 # --------------------- # Jazz Treebank # --------------------- #
 class JTBDataModule(LightningDataModule):
     def __init__(
@@ -865,6 +894,7 @@ class JTBDataset(Dataset):
         self.truth_masks = []
         self.time_signatures = []
         self.titles = []
+        self.head_seqs = []
         for i,tree_d in enumerate(tree_dicts):
             ts_dict = dict_data[i]["meter"]
             if (only_tree) or has_tree[i] : # if the piece has a tree
@@ -878,6 +908,8 @@ class JTBDataset(Dataset):
                 truth_mask = get_edges_mask(d_arc, pot_arcs)
                 # compute chord features
                 chord_feature = get_features_from_chord_labels(ch,ts_dict,dict_data[i]["beats"])
+                # add head seq
+                head_seq = get_head_seq(d_arc, len(ch))
             else:
                 # we don't have any trees, so arcs will be None
                 d_arc = torch.tensor([])
@@ -901,6 +933,7 @@ class JTBDataset(Dataset):
                 self.chords_features.append(chord_feature)
                 self.time_signatures.append((ts_dict["numerator"],ts_dict["denominator"]))
                 self.titles.append(dict_data[i]["title"])
+                self.head_seqs.append(head_seq)
         print(f"Done loading data. {len(dict_data)-len(self.chords_features)} out of {len(dict_data)} pieces were discarded because of errors.")
 
 
@@ -914,6 +947,7 @@ class JTBDataset(Dataset):
                 data_preparation(self.chords_features[idx]),
                 self.truth_masks[idx],
                 self.pot_arcs[idx],
+                self.head_seqs[idx],
             )
         else:
             if not self.to_augment_dict[
@@ -923,6 +957,7 @@ class JTBDataset(Dataset):
                     data_preparation(self.chords_features[idx], self.will_use_embeddings),
                     self.truth_masks[idx],
                     self.pot_arcs[idx],
+                    self.head_seqs[idx],
                 )
             else:  # augment
                 return (
@@ -932,6 +967,7 @@ class JTBDataset(Dataset):
                     ),
                     self.truth_masks[idx],
                     self.pot_arcs[idx],
+                    self.head_seqs[idx],
                 )
 
     def get_positive_weight(self):
@@ -955,8 +991,9 @@ class JTBDatasetAugmented(Dataset):
         self.aug_truth_masks = []
         self.aug_pot_arcs = []
         self.aug_score_files = []
+        self.aug_head_seqs = []
         print("Augmenting data...")
-        for chord_feat, t_mask, p_arc in pieces:
+        for chord_feat, t_mask, p_arc, h_seq in pieces:
             for transp_int in range(12):
                 chord_feat_transp = chord_feat.clone()
                 # only transpose the root, by summing and modulo 12
@@ -965,6 +1002,7 @@ class JTBDatasetAugmented(Dataset):
                 self.aug_note_features.append(chord_feat_transp)
                 self.aug_pot_arcs.append(p_arc)
                 self.aug_truth_masks.append(t_mask)
+                self.aug_head_seqs.append(h_seq)
 
     def __len__(self):
         return len(self.aug_truth_masks)
@@ -974,6 +1012,7 @@ class JTBDatasetAugmented(Dataset):
             data_preparation(self.aug_note_features[idx], self.will_use_embeddings),
             self.aug_truth_masks[idx],
             self.aug_pot_arcs[idx],
+            self.aug_head_seqs[idx],
         )
 
 

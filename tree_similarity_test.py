@@ -6,16 +6,23 @@ import torch
 import random
 import argparse
 import warnings
-warnings.filterwarnings('ignore') # avoid printing the partitura warnings
+# warnings.filterwarnings('ignore') # avoid printing the partitura warnings
 import os
+import numpy as np
 
 from musicparser.data_loading import JTBDataModule
 from musicparser.models import ArcPredictionLightModel
 
 import wandb
-run = wandb.init()
-artifact = run.use_artifact('fosfrancesco/Parsing JTB/model-zvxdt6sm:v0', type='model')
-artifact_dir = artifact.download()
+
+download = False
+
+if download:
+    run = wandb.init()
+    artifact = run.use_artifact('fosfrancesco/Parsing JTB/model-zvxdt6sm:v0', type='model')
+    artifact_dir = artifact.download()
+else:
+    artifact_dir = "artifacts/model-zvxdt6sm:v0"
 
 datamodule = JTBDataModule(batch_size=1, num_workers=1, data_augmentation="preprocess", only_tree=True)
 datamodule.setup()
@@ -37,4 +44,6 @@ trainer = Trainer(
 # trainer.tune(model, datamodule=datamodule)
 # print("LR set to", model.lr)
 trainer.test(model,datamodule)
-trainer.predict(model, dataloaders=datamodule.test_dataloader())
+ctree_sim = trainer.predict(model, dataloaders=datamodule.test_dataloader())
+print(ctree_sim)
+print(np.mean(ctree_sim))

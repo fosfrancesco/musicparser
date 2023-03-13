@@ -39,6 +39,7 @@ def main():
     parser.add_argument('--n_heads', type=int, default=4)
     parser.add_argument('--pos_enc', type= str, default="relative", help="'absolute', or 'relative'" )
     parser.add_argument('--pretrain', type= str, default="False", help="'True', or 'False'" )
+    parser.add_argument('--loss', type= str, default="ce", help="'bce', or 'ce'" )
 
     args = parser.parse_args()
 
@@ -72,6 +73,7 @@ def main():
         emb_str = f"r{emb_arg[0]}f{emb_arg[0]}e{emb_arg[0]}d{emb_arg[3]}m{emb_arg[4]}"
     rpr = args.pos_enc == "relative"
     pretrain = eval(args.pretrain)
+    binary_loss = args.loss == "bce"
 
     print("Starting a new run with the following parameters:")
     print(args)
@@ -83,10 +85,10 @@ def main():
     else:
         pos_weight = 1
     input_dim = sum(embedding_dim.values()) if use_embeddings else 25
-    model = ArcPredictionLightModel(input_dim, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation, use_embeddings=use_embeddings, embedding_dim=embedding_dim, biaffine=biaffine, encoder_type=encoder_type, n_heads=n_heads, data_type="chords", rpr = rpr, pretrain_mode= pretrain )
+    model = ArcPredictionLightModel(input_dim, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation, use_embeddings=use_embeddings, embedding_dim=embedding_dim, biaffine=biaffine, encoder_type=encoder_type, n_heads=n_heads, data_type="chords", rpr = rpr, pretrain_mode= pretrain, binary_loss = binary_loss )
 
     if wandb_log:
-        name = f"{encoder_type}-{n_layers}-{n_hidden}-lr={lr}-wd={weight_decay}-dr={dropout}-act={activation}-emb={emb_str}-aug={data_augmentation}-biaf={biaffine}-heads={n_heads}-rpr={rpr}"        
+        name = f"{encoder_type}-{n_layers}-{n_hidden}-lr={lr}-wd={weight_decay}-dr={dropout}-act={activation}-emb={emb_str}-aug={data_augmentation}-biaf={biaffine}-heads={n_heads}-rpr={rpr}-loss={args.loss}"        
         wandb_logger = WandbLogger(log_model = True, project="Parsing JTB", name= name )
     else:
         wandb_logger = True
