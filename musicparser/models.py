@@ -32,7 +32,7 @@ class ArcPredictionLightModel(LightningModule):
         data_type = "notes",
         rpr = False,
         pretrain_mode = False,
-        binary_loss = True,
+        loss_type = 'ce',
     ):
         super().__init__()
         self.lr = lr
@@ -54,13 +54,20 @@ class ArcPredictionLightModel(LightningModule):
             pretrain_mode,
         )
         pos_weight = 1 if pos_weight is None else pos_weight
-        self.binary_loss = binary_loss
-        if binary_loss:
+        self.loss_type = loss_type
+        if loss_type == 'bce':
             self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
             self.val_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
+        elif loss_type == 'ce':
+            self.train_loss = torch.nn.CrossEntropyLoss(ignore_index=0) # ignore the root node
+            self.val_loss = torch.nn.CrossEntropyLoss(ignore_index=0) # ignore the root node
+        elif loss_type == 'both':
+            self.train_loss_bce = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
+            self.val_loss_bce = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
+            self.train_loss_ce = torch.nn.CrossEntropyLoss(ignore_index=0) # ignore the root node
+            self.val_loss_ce = torch.nn.CrossEntropyLoss(ignore_index=0) # ignore the root node
         else:
-            self.train_loss = torch.nn.CrossEntropyLoss()
-            self.val_loss = torch.nn.CrossEntropyLoss()
+            raise ValueError(f"loss_type {loss_type} not supported")
         self.val_f1score = BinaryF1Score()
         self.val_f1score_postp = BinaryF1Score()
         self.val_accuracy = VariableMulticlassAccuracy()
@@ -85,16 +92,20 @@ class ArcPredictionLightModel(LightningModule):
         note_seq, truth_arcs_mask, pot_arcs, head_seqs = note_seq[0], truth_arcs_mask[0], pot_arcs[0], head_seqs[0]
         if not self.pretrain_mode: # normal mode, predict arcs
             arc_pred_mask_logits = self.module(note_seq, pot_arcs)
-            if self.binary_loss:
-                loss = self.train_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float()).cpu()
-            else:
-                arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
-                pred_arc = pot_arcs[torch.round(arc_pred__mask_normalized).squeeze().bool()]
-                truth_arc = pot_arcs[truth_arcs_mask.bool()]
+            if self.loss_type == 'bce':
+                loss = self.train_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float())
+            elif self.loss_type == 'ce':
                 num_notes = len(note_seq)
                 # add the extra line and row for the root node and transpose to have a head prediction matrix
                 adj_pred_logits_root = self.compute_head_logits_root(pot_arcs, arc_pred_mask_logits, num_notes)
                 loss = self.train_loss(adj_pred_logits_root,head_seqs.long())
+            elif self.loss_type == 'both':
+                num_notes = len(note_seq)
+                # add the extra line and row for the root node and transpose to have a head prediction matrix
+                adj_pred_logits_root = self.compute_head_logits_root(pot_arcs, arc_pred_mask_logits, num_notes)
+                loss_bce = self.train_loss_bce(arc_pred_mask_logits.float(), truth_arcs_mask.float())
+                loss_ce = self.train_loss_ce(adj_pred_logits_root,head_seqs.long())
+                loss = loss_bce + loss_ce
             self.log("train_loss", loss.item(), prog_bar=True, on_step=True, on_epoch=True, batch_size=1)
             return loss
         else: # pretrain mode, predict chord labels
@@ -132,18 +143,21 @@ class ArcPredictionLightModel(LightningModule):
             # add the extra line and row for the root node and transpose to have a head prediction matrix
             adj_pred_logits_root = self.compute_head_logits_root(pot_arcs, arc_pred_mask_logits, num_notes)
             # compute loss
-            if self.binary_loss:
-                val_loss = self.val_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float()).cpu()
-                self.log("val_loss", val_loss.item(), on_epoch=True, batch_size=1)
-            else:
+            if self.loss_type == 'bce':
+                val_loss = self.val_loss(arc_pred_mask_logits.float(), truth_arcs_mask.float())
+            elif self.loss_type == 'ce':
                 val_loss = self.val_loss(adj_pred_logits_root,head_seqs.long())
-                self.log("val_loss", val_loss.item(), on_epoch=True, batch_size=1)
+            elif self.loss_type == 'both':
+                val_loss_bce = self.val_loss_bce(arc_pred_mask_logits.float(), truth_arcs_mask.float())
+                val_loss_ce = self.val_loss_ce(adj_pred_logits_root,head_seqs.long())
+                val_loss = val_loss_bce + val_loss_ce
+            self.log("val_loss", val_loss.item(), on_epoch=True, batch_size=1)
             # compute binary F1 score and accuracy
             adj_pred = self.pred_dlist2adj(pred_arc,truth_arc,num_notes)
             adj_target = pyg.utils.to_dense_adj(truth_arc.T, max_num_nodes=num_notes).squeeze().long().cpu()
             val_fscore = self.val_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
             self.log("val_fscore", val_fscore.item(), prog_bar=False, batch_size=1)
-            val_accuracy = self.val_accuracy(torch.argmax(adj_pred_logits_root, dim =0), head_seqs.long())
+            val_accuracy = self.val_accuracy(torch.argmax(adj_pred_logits_root, dim =1), head_seqs.long())
             self.log("val_accuracy", val_accuracy.item(), prog_bar=True, batch_size=1)
             # postprocess
             adj_pred_postp, pred_arc_postp = self.postprocess(pot_arcs, arc_pred__mask_normalized, num_notes)
@@ -151,7 +165,7 @@ class ArcPredictionLightModel(LightningModule):
             val_fscore_postp = self.test_f1score_postp.cpu()(adj_pred_postp.flatten(), adj_target.flatten())
             self.log("val_fscore_postp", val_fscore_postp.item(), prog_bar=False, batch_size=1)
             adj_pred_probs_root_postp = self.compute_head_probs_root_from_adj(adj_pred_postp, num_notes)
-            val_accuracy_postp = self.val_accuracy_postp.cpu()(torch.argmax(adj_pred_probs_root_postp, dim =0), head_seqs.long().cpu())
+            val_accuracy_postp = self.val_accuracy_postp.cpu()(torch.argmax(adj_pred_probs_root_postp, dim =1), head_seqs.long().cpu())
             self.log("val_accuracy_postp", val_accuracy_postp.item(), prog_bar=True, batch_size=1)
             # compute c_tree span similarity
             pred_ctree = dtree2unlabeled_ctree(pred_arc_postp)
@@ -188,16 +202,27 @@ class ArcPredictionLightModel(LightningModule):
         arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
         pred_arc = pot_arcs[torch.round(arc_pred__mask_normalized).squeeze().bool()]
         truth_arc = pot_arcs[truth_arcs_mask.bool()]
-        # compute F1 score
+        adj_pred_logits_root = self.compute_head_logits_root(pot_arcs, arc_pred_mask_logits, num_notes)
+        # compute binary F1 score and accuracy
         adj_pred = self.pred_dlist2adj(pred_arc,truth_arc,num_notes)
         adj_target = pyg.utils.to_dense_adj(truth_arc.T, max_num_nodes=num_notes).squeeze().long().cpu()
         test_fscore = self.test_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
-        self.log("test_fscore", test_fscore.item(), prog_bar=True, batch_size=1)
+        self.log("test_fscore", test_fscore.item(), prog_bar=False, batch_size=1)
+        test_accuracy = self.test_accuracy(torch.argmax(adj_pred_logits_root, dim =1), head_seqs.long())
+        self.log("test_accuracy", test_accuracy.item(), prog_bar=True, batch_size=1)
         # postprocess
-        adj_pred_postp, _ = self.postprocess(pot_arcs, arc_pred__mask_normalized, num_notes)
-        # compute postprocessed F1 score
+        adj_pred_postp, pred_arc_postp = self.postprocess(pot_arcs, arc_pred__mask_normalized, num_notes)
+        # compute postprocessed F1 score and accuracy
         test_fscore_postp = self.test_f1score_postp.cpu()(adj_pred_postp.flatten(), adj_target.flatten())
-        self.log("test_fscore_postp", test_fscore_postp.item(), prog_bar=True, batch_size=1)
+        self.log("test_fscore_postp", test_fscore_postp.item(), prog_bar=False, batch_size=1)
+        adj_pred_probs_root_postp = self.compute_head_probs_root_from_adj(adj_pred_postp, num_notes)
+        test_accuracy_postp = self.test_accuracy_postp.cpu()(torch.argmax(adj_pred_probs_root_postp, dim =1), head_seqs.long().cpu())
+        self.log("test_accuracy_postp", test_accuracy_postp.item(), prog_bar=True, batch_size=1)
+        # compute c_tree span similarity
+        pred_ctree = dtree2unlabeled_ctree(pred_arc_postp)
+        truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu().tolist())
+        test_span_sim = self.test_span_similarity.cpu()(pred_ctree, truth_ctree)
+        self.log("test_ctree_sim", test_span_sim.item(), prog_bar=True, batch_size=1)
 
     
     def predict_step(self, batch, batch_idx):
@@ -236,12 +261,9 @@ class ArcPredictionLightModel(LightningModule):
         # add a new upper row and left column for the root to the adjency matrix
         adj_pred_logits_root = torch.vstack((torch.zeros((1, num_notes),device = arc_pred_mask_logits.device), head_logits))
         adj_pred_logits_root = torch.hstack((torch.zeros((num_notes+1, 1),device = arc_pred_mask_logits.device), adj_pred_logits_root))
-        # adj_pred_logits_root[0,:] = float("-inf")
-        # adj_pred_logits_root[:,0] = float("-inf")
-        # adj_pred_logits_root[0][0] = float("inf")
-        adj_pred_logits_root[0,:] = -3
-        adj_pred_logits_root[:,0] = -3
-        adj_pred_logits_root[0][0] = 2
+        adj_pred_logits_root[0,:] = float("-inf")
+        adj_pred_logits_root[:,0] = float("-inf")
+        adj_pred_logits_root[0][0] = float("inf")
         return adj_pred_logits_root
     
     def compute_head_probs_root_from_adj(self,adj, num_notes):

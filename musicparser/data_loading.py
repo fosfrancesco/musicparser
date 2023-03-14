@@ -592,6 +592,8 @@ def online_data_augmentation(n_feats):
     return n_feats
 
 
+
+
 def get_features_from_nra(nra, time_signatures, rel_onset_div, total_measure_div):
     """Extracts the features from the (tied) note rest array."""
     duration = nra["duration_div"] / total_measure_div
@@ -962,7 +964,7 @@ class JTBDataset(Dataset):
             else:  # augment
                 return (
                     data_preparation(
-                        online_data_augmentation(self.chords_features[idx]),
+                        online_chord_augmentation(self.chords_features[idx]),
                         self.will_use_embeddings,
                     ),
                     self.truth_masks[idx],
@@ -1014,6 +1016,11 @@ class JTBDatasetAugmented(Dataset):
             self.aug_pot_arcs[idx],
             self.aug_head_seqs[idx],
         )
+
+def online_chord_augmentation(chord_feat):
+    random_transp_int = int(torch.randint(low=0, high=11, size=(1,))[0])
+    chord_feat[:, 0] = np.remainder(chord_feat[:, 0] + random_transp_int,12)
+    return chord_feat
 
 
 def parse_jht_to_dep_tree(jht_dict):
