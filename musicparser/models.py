@@ -33,6 +33,8 @@ class ArcPredictionLightModel(LightningModule):
         rpr = False,
         pretrain_mode = False,
         loss_type = 'ce',
+        optimizer = 'adamw',
+        warmup_steps = 10,
     ):
         super().__init__()
         self.lr = lr
@@ -54,6 +56,8 @@ class ArcPredictionLightModel(LightningModule):
             pretrain_mode,
         )
         pos_weight = 1 if pos_weight is None else pos_weight
+        self.optimizer = optimizer
+        self.warmup_steps = warmup_steps
         self.loss_type = loss_type
         if loss_type == 'bce':
             self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
@@ -301,16 +305,72 @@ class ArcPredictionLightModel(LightningModule):
                 root = i
         return adj_pred_postp, pred_arc_postp
 
+    # def configure_optimizers(self):
+    #     if self.optimizer == "adamw":
+    #         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+    #         scheduler = None
+    #     elif self.optimizer == "radam":
+    #         optimizer = torch.optim.RAdam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+    #         scheduler = None
+    #     elif self.optimizer == "warmadamw":
+    #         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+    #         scheduler = CosineWarmupScheduler(optimizer, self.warmup_steps, 100)
+    #     elif self.optimizer == "warmadam":
+    #         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+    #         scheduler = CosineWarmupScheduler(optimizer, self.warmup_steps, 100)
+    #     else:
+    #         raise ValueError("optimizer must be either adamw, radam or warmadamw")
+    #     if scheduler is None:
+    #         return {
+    #             "optimizer": optimizer,
+    #         }
+    #     else:
+    #         return {
+    #             "optimizer": optimizer,
+    #             "lr_scheduler": scheduler,
+    #         }
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min")
-        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 20, verbose=True)
+        if self.optimizer == "adamw":
+            optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            self.lr_scheduler = None
+        elif self.optimizer == "radam":
+            optimizer = torch.optim.RAdam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            self.lr_scheduler = None
+        elif self.optimizer == "warmadamw":
+            optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            self.lr_scheduler = CosineWarmupScheduler(optimizer, self.warmup_steps, 144000)
+        elif self.optimizer == "warmadam":
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+            self.lr_scheduler = CosineWarmupScheduler(optimizer, self.warmup_steps, 144000)
+        else:
+            raise ValueError("optimizer must be either warmadamw, or warmadam")
         return {
             "optimizer": optimizer,
-            # "lr_scheduler": scheduler,
-            # "monitor": "val_loss"
         }
+    
+    def optimizer_step(self, *args, **kwargs):
+        super().optimizer_step(*args, **kwargs)
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step()  # Step per iteration, we need to do it here, not to return the scheduler to the pytorch lightning trainer
+            # print("setting_lr to", self.lr_scheduler.get_last_lr())
+            # print("step", self.lr_scheduler.last_epoch)
 
+class CosineWarmupScheduler(torch.optim.lr_scheduler._LRScheduler):
+    def __init__(self, optimizer, warmup, max_iters):
+        self.warmup = warmup
+        self.max_num_iters = max_iters
+        super().__init__(optimizer)
+
+    def get_lr(self):
+        lr_factor = self.get_lr_factor(epoch=self.last_epoch)
+        return [base_lr * lr_factor for base_lr in self.base_lrs]
+
+    def get_lr_factor(self, epoch):
+        # here it says epoch, but we use it as step
+        lr_factor = 0.5 * (1 + np.cos(np.pi * epoch / self.max_num_iters))
+        if epoch <= self.warmup:
+            lr_factor *= epoch * 1.0 / self.warmup
+        return lr_factor
 
 
 class TransformerEncoder(torch.nn.Module):

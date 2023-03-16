@@ -97,7 +97,7 @@ def main():
         )
     # pretrain on the big dataset
     trainer.fit(model, datamodule)
-    trainer.test(model, datamodule)
+    trainer.test(model, datamodule,ckpt_path=checkpoint_callback.best_model_path)
 
 
 

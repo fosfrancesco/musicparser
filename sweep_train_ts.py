@@ -90,7 +90,7 @@ def main(config):
         )
 
     trainer.fit(model, datamodule)
-    trainer.test(model, datamodule)
+    trainer.test(model, datamodule,ckpt_path=checkpoint_callback.best_model_path)
 
 
 

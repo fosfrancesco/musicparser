@@ -1,0 +1,70 @@
+program: sweep_train_jtb.py
+method: bayes
+metric:
+  goal: maximize
+  name: test_ctree_sim
+parameters:
+  embeddings:
+    values:
+      - "[96]"
+    distribution: categorical
+  weight_decay:
+    values:
+      - 0.05
+      - 0.005
+      - 0.0005
+    distribution: categorical
+  encoder_type:
+    values:
+      - transformer
+    distribution: categorical
+  activation:
+    values:
+      - gelu
+    distribution: categorical
+  n_layers:
+    values:
+      - 2
+    distribution: categorical
+  n_hidden:
+    values:
+      - 64
+    distribution: categorical
+  biaffine:
+    values:
+      - False
+    distribution: categorical
+  n_heads:
+    values:
+      - 8
+    distribution: categorical
+  dropout:
+    values:
+      - 0.25
+    distribution: categorical
+  lr:
+    values:
+      - 0.005
+      - 0.001
+      - 0.0005
+      - 0.0001
+      - 0.00005
+      - 0.00001
+    distribution: categorical
+  loss_type:
+    values:
+      - "both"
+    distribution: categorical
+  use_pos_weight:
+    values:
+      - False
+    distribution: categorical
+  optimizer:
+    values:
+      - warmadamw
+      - warmadam
+    distribution: categorical
+  warmup_steps:
+    max: 1000
+    min: 10
+    distribution: int_uniform
