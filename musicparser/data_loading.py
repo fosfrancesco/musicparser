@@ -65,7 +65,7 @@ DURATIONS = [
     4.0000,
 ]
 METRICAL_DIVISIONS = {
-    12: [4, 3, 2, 2],
+    12: [2, 2, 3, 2],
     9: [3, 3, 2, 2],
     8: [2, 2, 2, 2],
     6: [2, 3, 2, 2],
@@ -721,11 +721,15 @@ def get_note_features_and_dep_arcs(score_file, ts_xml_file):
     return note_features, dep_arcs, gttm_style_dep, time_signature
 
 
-def get_nra(score):
+def get_nra(score, untied=False):
     # get tied note array
     na = pt.utils.music.ensure_notearray(score)[
         ["onset_div", "duration_div", "pitch", "id"]
     ]
+    if untied: # this is to have a different representation of the notes, where tied notes are split. Not used by the current system
+        na_untied = pt.utils.music.note_array_from_note_list(score.parts[0].notes)["onset_div", "duration_div", "pitch", "id"]
+        # build a boolean array that is true if the note is tried to the previous
+        tie_mask = ~np.isin(na_untied["id"], na["id"])
     # get rest array
     ra = pt.utils.music.ensure_rest_array(score.parts[0])[
         ["onset_div", "duration_div", "pitch", "id"]
