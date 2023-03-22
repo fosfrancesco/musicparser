@@ -7,7 +7,7 @@ import partitura as pt
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader
 import torch
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
 import torch.nn.functional as F
 from collections import defaultdict
 from joblib import Parallel, delayed
@@ -768,29 +768,35 @@ class JTBDataModule(LightningDataModule):
         only_tree=True,
         tree_type="complete",
         data_augmentation="no",
+        cross_validation = None
     ):
         super(JTBDataModule, self).__init__()
         if data_augmentation not in ["no", "online", "preprocess"]:
             raise ValueError(
                 "data_augmentation must be one of 'no', 'online', 'preprocess'"
             )
+        self.cross_validation = cross_validation
         self.data_augmentation = data_augmentation
         self.batch_size = batch_size
         self.num_workers = num_workers
         # instatiate dataset
         self.dataset = JTBDataset("data/jazz_tb/treebank.json", data_augmentation=data_augmentation, only_tree=only_tree, tree_type=tree_type,n_jobs=num_workers)
         self.positive_weight = self.dataset.get_positive_weight()
+        
 
     def prepare_data(self):
         pass
 
     def setup(self, stage=None):
-        idxs = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if len(p_arcs)!=0] # this should correspond to all 150 pieces with trees
-        ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
-        train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=np.array(ts_numerators)[idxs])
-        val_idx, test_idx = train_test_split(
-            valtest_idx, test_size=0.5, random_state=0, stratify=np.array(ts_numerators)[valtest_idx]
-        )
+        if self.cross_validation is None:
+            idxs = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if len(p_arcs)!=0] # this should correspond to all 150 pieces with trees
+            ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
+            train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=np.array(ts_numerators)[idxs])
+            val_idx, test_idx = train_test_split(
+                valtest_idx, test_size=0.5, random_state=0, stratify=np.array(ts_numerators)[valtest_idx]
+            )
+        else: # cross validation case
+            raise NotImplementedError
         # create the datasets
         if self.data_augmentation == "preprocess":
             self.dataset_train = JTBDatasetAugmented(
@@ -878,7 +884,7 @@ class JTBDataset(Dataset):
         self.to_augment_dict = {}
         self.only_tree = only_tree
         # load data
-        print("Loading data...")
+        print(f"Loading {tree_type} tree data...")
         with open(str(Path(data_json_file))) as f:
             dict_data = json.load(f)
         if only_tree:
@@ -1045,7 +1051,7 @@ def parse_jht_to_dep_tree(jht_dict):
             return out
         else:  # recursive call
             assert len(children) == 2 
-            current_label = dict_elem["label"]
+            current_label = noast(dict_elem["label"])
             out_list = []  # dependency list
             iterative_result_left = _iterative_parse_jht(children[0])
             iterative_result_right = _iterative_parse_jht(children[1])
@@ -1067,6 +1073,11 @@ def parse_jht_to_dep_tree(jht_dict):
             
     dep_arcs, root = _iterative_parse_jht(jht_dict)
     return dep_arcs, all_leaves
+
+def noast(label):
+    """Remove the asterisk from the label."""
+    return label if label[-1] != "*" else label[:-1]
+
 
 def parse_chord_label(chord_label):
   # Define a regex pattern for chord symbols
