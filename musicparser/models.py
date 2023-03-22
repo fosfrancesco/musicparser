@@ -74,13 +74,13 @@ class ArcPredictionLightModel(LightningModule):
             raise ValueError(f"loss_type {loss_type} not supported")
         self.val_f1score = BinaryF1Score()
         self.val_f1score_postp = BinaryF1Score()
-        self.val_accuracy = VariableMulticlassAccuracy()
-        self.val_accuracy_postp = VariableMulticlassAccuracy()
+        self.val_accuracy = VariableMulticlassAccuracy(ignore_index = 0)
+        self.val_accuracy_postp = VariableMulticlassAccuracy(ignore_index = 0)
         self.val_span_similarity = CTreeSpanSimilarity()
         self.test_f1score = BinaryF1Score()
         self.test_f1score_postp = BinaryF1Score()
-        self.test_accuracy = VariableMulticlassAccuracy()
-        self.test_accuracy_postp = VariableMulticlassAccuracy()
+        self.test_accuracy = VariableMulticlassAccuracy(ignore_index = 0)
+        self.test_accuracy_postp = VariableMulticlassAccuracy(ignore_index = 0)
         self.test_span_similarity = CTreeSpanSimilarity()
         self.pretrain_mode = pretrain_mode
         if pretrain_mode:

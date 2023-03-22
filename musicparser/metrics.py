@@ -10,13 +10,18 @@ class VariableMulticlassAccuracy(Metric):
     higher_is_better = True
     full_state_update: bool = False
 
-    def __init__(self):
+    def __init__(self, ignore_index: int = -100):
         super().__init__()
+        self.ignore_index = ignore_index
         self.add_state("accuracy", default=torch.tensor(0, dtype=torch.float32), dist_reduce_fx="sum")
         self.add_state("samples", default=torch.tensor(0), dist_reduce_fx="sum")
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
         assert preds.shape == target.shape
+
+        mask = target != self.ignore_index
+        preds = preds[mask]
+        target = target[mask]
 
         self.accuracy += torch.sum(preds == target).float() / target.numel()
         self.samples += 1
