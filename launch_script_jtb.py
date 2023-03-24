@@ -25,7 +25,7 @@ def main():
     parser.add_argument('--n_layers', type=int, default=4)
     parser.add_argument('--n_hidden', type=int, default=64)
     parser.add_argument('--dropout', type=float, default=0.2255)
-    parser.add_argument('--lr', type=float, default=0.0001)
+    parser.add_argument('--lr', type=float, default=0.0002)
     parser.add_argument('--weight_decay', type=float, default=0.05)
     parser.add_argument("--activation", type=str, default="gelu")
     parser.add_argument("--wandb_log", action="store_true", help="Use wandb for logging.")
@@ -44,6 +44,7 @@ def main():
     parser.add_argument('--optimizer', type= str, default="warmadamw", help="'adamw', 'radam', or 'warmadamw'" )
     parser.add_argument('--warmup_steps', type= int, default=50, help="warmup steps for warmadamw")
     parser.add_argument('--tree_type', type= str, default="open", help="'open' or 'complete'" )
+    parser.add_argument('--max_epochs', type= int, default=50, help="max epochs for training")
 
     args = parser.parse_args()
 
@@ -81,18 +82,20 @@ def main():
     optimizer = args.optimizer
     warmup_steps = args.warmup_steps
     tree_type = args.tree_type
+    max_epochs = args.max_epochs
 
     print("Starting a new run with the following parameters:")
     print(args)
 
     datamodule = JTBDataModule(batch_size=1, num_workers=num_workers, data_augmentation=data_augmentation, only_tree=not pretrain, tree_type=tree_type)
+    datamodule.setup()
     if use_pos_weight:
         pos_weight = int(datamodule.positive_weight)
         print("Using pos_weight", pos_weight)
     else:
         pos_weight = 1
     input_dim = sum(embedding_dim.values()) if use_embeddings else 25
-    model = ArcPredictionLightModel(input_dim, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation, use_embeddings=use_embeddings, embedding_dim=embedding_dim, biaffine=biaffine, encoder_type=encoder_type, n_heads=n_heads, data_type="chords", rpr = rpr, pretrain_mode= pretrain, loss_type = loss_type, optimizer = optimizer, warmup_steps= warmup_steps )
+    model = ArcPredictionLightModel(input_dim, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation, use_embeddings=use_embeddings, embedding_dim=embedding_dim, biaffine=biaffine, encoder_type=encoder_type, n_heads=n_heads, data_type="chords", rpr = rpr, pretrain_mode= pretrain, loss_type = loss_type, optimizer = optimizer, warmup_steps= warmup_steps, max_epochs = max_epochs, len_train_dataloader= len(datamodule.dataset_train))
 
     if wandb_log:
         name = f"{encoder_type}-{n_layers}-{n_hidden}-lr={lr}-wd={weight_decay}-dr={dropout}-act={activation}-emb={emb_str}-aug={data_augmentation}-biaf={biaffine}-heads={n_heads}-rpr={rpr}-loss={loss_type}-PW={use_pos_weight}-opt={optimizer}-warmup={warmup_steps}-T={tree_type}"        
@@ -105,7 +108,7 @@ def main():
     lr_monitor = LearningRateMonitor(logging_interval='step')
     
     trainer = Trainer(
-        max_epochs=200, accelerator="auto", devices= devices, #strategy="ddp",
+        max_epochs=max_epochs, accelerator="auto", devices= devices, #strategy="ddp",
         num_sanity_val_steps=1,
         logger=wandb_logger,
         callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],

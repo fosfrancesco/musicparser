@@ -1,5 +1,5 @@
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning import Trainer, seed_everything
 import torch
@@ -40,6 +40,12 @@ config = wandb.config
 # CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweeps_JTB/p6ogzds5
 # CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweeps_JTB/p6ogzds5
 
+###### Sweep Random ######	
+# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweeps_JTB/pp5gcz7f
+# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweeps_JTB/pp5gcz7f
+# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweeps_JTB/pp5gcz7f
+# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweeps_JTB/pp5gcz7f
+
 
 def main(config):
     # set parameters from config
@@ -75,34 +81,38 @@ def main(config):
     num_workers = 20
     devices = [0]
     wandb_log = True
-    patience = 30
+    patience = 100
     data_augmentation = "preprocess"
+    tree_type = "open"
+    max_epochs = 60
 
-    datamodule = JTBDataModule(batch_size=1, num_workers=num_workers, data_augmentation=data_augmentation, only_tree=not pretrain)
+    datamodule = JTBDataModule(batch_size=1, num_workers=num_workers, data_augmentation=data_augmentation, only_tree=not pretrain, tree_type = tree_type)
+    datamodule.setup()
     if use_pos_weight:
         pos_weight = int(datamodule.positive_weight)
         print("Using pos_weight", pos_weight)
     else:
         pos_weight = 1
     input_dim = sum(embedding_dim.values()) if use_embeddings else 25
-    model = ArcPredictionLightModel(input_dim, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation, use_embeddings=use_embeddings, embedding_dim=embedding_dim, biaffine=biaffine, encoder_type=encoder_type, n_heads=n_heads, data_type="chords", rpr = rpr, pretrain_mode= pretrain, loss_type = loss_type, optimizer=optimizer, warmup_steps=warmup_steps )
+    model = ArcPredictionLightModel(input_dim, n_hidden,pos_weight=pos_weight, dropout=dropout, lr=lr, weight_decay=weight_decay, n_layers=n_layers, activation=activation, use_embeddings=use_embeddings, embedding_dim=embedding_dim, biaffine=biaffine, encoder_type=encoder_type, n_heads=n_heads, data_type="chords", rpr = rpr, pretrain_mode= pretrain, loss_type = loss_type, optimizer=optimizer, warmup_steps=warmup_steps, max_epochs = max_epochs, len_train_dataloader= len(datamodule.dataset_train) )
 
-    if wandb_log:
-        name = f"{encoder_type}-{n_layers}-{n_hidden}-lr={lr}-wd={weight_decay}-dr={dropout}-act={activation}-emb={emb_str}-aug={data_augmentation}-biaf={biaffine}-heads={n_heads}-rpr={rpr}-loss={loss_type}-PW={use_pos_weight}"        
-        wandb_logger = WandbLogger(log_model = True, project="Parsing JTB", name= name )
-    else:
-        wandb_logger = True
-
-    checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_ctree_sim", mode="max")
-    early_stop_callback = EarlyStopping(monitor="val_ctree_sim", min_delta=0.00, patience=patience, verbose=True, mode="max")
     
+    name = ""
+    wandb_logger = WandbLogger(log_model = True, project="Parsing JTB", name= name )
+
+
+    checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_accuracy_postp", mode="max")
+    early_stop_callback = EarlyStopping(monitor="val_accuracy_postp", min_delta=0.00, patience=patience, verbose=True, mode="max")
+    lr_monitor = LearningRateMonitor(logging_interval='step')
+
     trainer = Trainer(
-        max_epochs=100, accelerator="auto", devices= devices, #strategy="ddp",
+        max_epochs=max_epochs, accelerator="auto", devices= devices, #strategy="ddp",
         num_sanity_val_steps=1,
         logger=wandb_logger,
-        callbacks=[checkpoint_callback, early_stop_callback],
+        callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],
         deterministic=True,
         reload_dataloaders_every_n_epochs= 1 if data_augmentation=="online" else 0,
+        log_every_n_steps=10
         )
 
     trainer.fit(model, datamodule)

@@ -35,6 +35,8 @@ class ArcPredictionLightModel(LightningModule):
         loss_type = 'ce',
         optimizer = 'adamw',
         warmup_steps = 10,
+        max_epochs = 100,
+        len_train_dataloader = 100,
     ):
         super().__init__()
         self.lr = lr
@@ -58,6 +60,8 @@ class ArcPredictionLightModel(LightningModule):
         pos_weight = 1 if pos_weight is None else pos_weight
         self.optimizer = optimizer
         self.warmup_steps = warmup_steps
+        self.len_train_dataloader = len_train_dataloader
+        self.max_epochs = max_epochs
         self.loss_type = loss_type
         if loss_type == 'bce':
             self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
@@ -305,30 +309,7 @@ class ArcPredictionLightModel(LightningModule):
                 root = i
         return adj_pred_postp, pred_arc_postp
 
-    # def configure_optimizers(self):
-    #     if self.optimizer == "adamw":
-    #         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-    #         scheduler = None
-    #     elif self.optimizer == "radam":
-    #         optimizer = torch.optim.RAdam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-    #         scheduler = None
-    #     elif self.optimizer == "warmadamw":
-    #         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-    #         scheduler = CosineWarmupScheduler(optimizer, self.warmup_steps, 100)
-    #     elif self.optimizer == "warmadam":
-    #         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-    #         scheduler = CosineWarmupScheduler(optimizer, self.warmup_steps, 100)
-    #     else:
-    #         raise ValueError("optimizer must be either adamw, radam or warmadamw")
-    #     if scheduler is None:
-    #         return {
-    #             "optimizer": optimizer,
-    #         }
-    #     else:
-    #         return {
-    #             "optimizer": optimizer,
-    #             "lr_scheduler": scheduler,
-    #         }
+
     def configure_optimizers(self):
         if self.optimizer == "adamw":
             optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
@@ -338,13 +319,13 @@ class ArcPredictionLightModel(LightningModule):
             self.lr_scheduler = None
         elif self.optimizer == "warmadamw":
             optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-            self.lr_scheduler = CosineWarmupScheduler(optimizer, self.warmup_steps, 144000)
+            self.lr_scheduler = CosineWarmupScheduler(optimizer, self.warmup_steps, self.max_epochs*self.len_train_dataloader)
         elif self.optimizer == "warmadam":
             optimizer = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-            self.lr_scheduler = CosineWarmupScheduler(optimizer, self.warmup_steps, 144000)
+            self.lr_scheduler = CosineWarmupScheduler(optimizer, self.warmup_steps, self.max_epochs*self.len_train_dataloader)
         else:
             raise ValueError("optimizer must be either warmadamw, or warmadam")
-        return {
+        return { # we don't return scheduler because it has to be apply after each step, not after each epoch
             "optimizer": optimizer,
         }
     

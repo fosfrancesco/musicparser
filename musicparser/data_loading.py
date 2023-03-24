@@ -782,12 +782,16 @@ class JTBDataModule(LightningDataModule):
         # instatiate dataset
         self.dataset = JTBDataset("data/jazz_tb/treebank.json", data_augmentation=data_augmentation, only_tree=only_tree, tree_type=tree_type,n_jobs=num_workers)
         self.positive_weight = self.dataset.get_positive_weight()
+        # check for already setup
+        self.is_setup = False
         
 
     def prepare_data(self):
         pass
 
     def setup(self, stage=None):
+        if self.is_setup: # if already setup,
+            return
         if self.cross_validation is None:
             idxs = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if len(p_arcs)!=0] # this should correspond to all 150 pieces with trees
             ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
@@ -826,6 +830,7 @@ class JTBDataModule(LightningDataModule):
             print(f"Pretrain size :{len(self.dataset_pretrain)}")
         else:
             print("No pretraining data")
+        self.is_setup = True
 
     def pre_train_dataloader(self):
         return DataLoader(
