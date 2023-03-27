@@ -241,18 +241,50 @@ class ArcPredictionLightModel(LightningModule):
         arc_pred_mask_logits = self.module(note_seq, pot_arcs)
         arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
         pred_arc = pot_arcs[torch.round(arc_pred__mask_normalized).squeeze().bool()]
-        truth_arc = pot_arcs[truth_arcs_mask.bool()].cpu().tolist()
+        truth_arc = pot_arcs[truth_arcs_mask.bool()]
+        adj_pred_logits_root = self.compute_head_logits_root(pot_arcs, arc_pred_mask_logits, num_notes)
+        # compute binary F1 score and accuracy
+        adj_pred = self.pred_dlist2adj(pred_arc,truth_arc,num_notes)
+        adj_target = pyg.utils.to_dense_adj(truth_arc.T, max_num_nodes=num_notes).squeeze().long().cpu()
+        test_fscore = self.test_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
+        self.print("test_fscore", test_fscore.item())
+        test_accuracy = self.test_accuracy(torch.argmax(adj_pred_logits_root, dim =1), head_seqs.long())
+        self.print("test_accuracy", test_accuracy.item())
         # postprocess
-        _, pred_arc_postp = self.postprocess(pot_arcs, arc_pred__mask_normalized, num_notes)
-        # compute the c_tree for the pred_arc and truth_arc
+        adj_pred_postp, pred_arc_postp = self.postprocess(pot_arcs, arc_pred__mask_normalized, num_notes)
+        # compute postprocessed F1 score and accuracy
+        test_fscore_postp = self.test_f1score_postp.cpu()(adj_pred_postp.flatten(), adj_target.flatten())
+        self.print("test_fscore_postp", test_fscore_postp.item())
+        adj_pred_probs_root_postp = self.compute_head_probs_root_from_adj(adj_pred_postp, num_notes)
+        test_accuracy_postp = self.test_accuracy_postp.cpu()(torch.argmax(adj_pred_probs_root_postp, dim =1), head_seqs.long().cpu())
+        self.print("test_accuracy_postp", test_accuracy_postp.item())
+        # compute c_tree span similarity
         pred_ctree = dtree2unlabeled_ctree(pred_arc_postp)
-        truth_ctree = dtree2unlabeled_ctree(truth_arc)
-        # compute c_tree similarity
-        ctree_sim = self.test_span_sim.cpu()(pred_ctree, truth_ctree)
-        print("c_tree_span_similarity", ctree_sim)
-        print(pred_ctree)
-        print(truth_ctree)
-        return ctree_sim
+        truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu().tolist())
+        test_span_sim = self.test_span_similarity.cpu()(pred_ctree, truth_ctree)
+        self.print("test_ctree_sim", test_span_sim.item())
+        return {"pot_arcs": pot_arcs, "arc_pred__mask_normalized" : arc_pred__mask_normalized,"head_seq_truth": head_seqs.long(),"head_seq_postp" : torch.argmax(adj_pred_probs_root_postp, dim =1), "head_seq" : torch.argmax(adj_pred_logits_root, dim =1) , "pred_arc" : pred_arc , "pred_arc_postp": pred_arc_postp, "truth_arc": truth_arc.cpu().tolist(), "pred_ctree": pred_ctree, "truth_ctree": truth_ctree}
+
+        
+        # note_seq, truth_arcs_mask, pot_arcs, head_seqs = batch
+        # note_seq, truth_arcs_mask, pot_arcs, head_seqs = note_seq[0], truth_arcs_mask[0], pot_arcs[0], head_seqs[0]
+        # num_notes = len(note_seq)
+        # # predict arcs
+        # arc_pred_mask_logits = self.module(note_seq, pot_arcs)
+        # arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
+        # pred_arc = pot_arcs[torch.round(arc_pred__mask_normalized).squeeze().bool()]
+        # truth_arc = pot_arcs[truth_arcs_mask.bool()].cpu().tolist()
+        # # postprocess
+        # _, pred_arc_postp = self.postprocess(pot_arcs, arc_pred__mask_normalized, num_notes)
+        # # compute the c_tree for the pred_arc and truth_arc
+        # pred_ctree = dtree2unlabeled_ctree(pred_arc_postp)
+        # truth_ctree = dtree2unlabeled_ctree(truth_arc)
+        # # compute c_tree similarity
+        # ctree_sim = self.test_span_sim.cpu()(pred_ctree, truth_ctree)
+        # print("c_tree_span_similarity", ctree_sim)
+        # print(pred_ctree)
+        # print(truth_ctree)
+        # return ctree_sim
 
 
     def pred_dlist2adj(self,pred_arc,truth_arc,num_notes):
@@ -291,9 +323,11 @@ class ArcPredictionLightModel(LightningModule):
         adj_pred_log_probs_root = torch.log(adj_pred_probs_root)
         # postprocess with chu-liu edmonds algorithm
         if alg == "chuliu_edmonds": #transpose to have an adjency matrix with edges pointing toward the parent node and 
-            head_seq = chuliu_edmonds_one_root(adj_pred_log_probs_root.numpy().cpu().T)
+            head_seq = chuliu_edmonds_one_root(adj_pred_log_probs_root.cpu().numpy().T)
         elif alg == "eisner":
             head_seq = eisner(adj_pred_log_probs_root.cpu().numpy())
+        elif alg == "eisner_fast":
+            head_seq = eisner_fast(torch.unsqueeze(adj_pred_log_probs_root,dim=0).cpu().numpy(), torch.ones(1,num_notes))
         else:
             raise ValueError("alg must be either eisner or chuliu_edmonds")
         head_seq = head_seq[1:] # remove the root

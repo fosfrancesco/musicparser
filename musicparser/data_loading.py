@@ -5,7 +5,6 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import partitura as pt
 from pytorch_lightning import LightningDataModule
-from torch.utils.data import DataLoader
 import torch
 from sklearn.model_selection import train_test_split, StratifiedKFold
 import torch.nn.functional as F
@@ -768,14 +767,14 @@ class JTBDataModule(LightningDataModule):
         only_tree=True,
         tree_type="complete",
         data_augmentation="no",
-        cross_validation = None
+        loo_index = None
     ):
         super(JTBDataModule, self).__init__()
         if data_augmentation not in ["no", "online", "preprocess"]:
             raise ValueError(
                 "data_augmentation must be one of 'no', 'online', 'preprocess'"
             )
-        self.cross_validation = cross_validation
+        self.loo_index = loo_index # index for leave one out cross validation
         self.data_augmentation = data_augmentation
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -792,15 +791,20 @@ class JTBDataModule(LightningDataModule):
     def setup(self, stage=None):
         if self.is_setup: # if already setup,
             return
-        if self.cross_validation is None:
-            idxs = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if len(p_arcs)!=0] # this should correspond to all 150 pieces with trees
-            ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
+        idxs = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if len(p_arcs)!=0] # this should correspond to all 150 pieces with trees
+        ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
+        if self.loo_index is None:
             train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=np.array(ts_numerators)[idxs])
             val_idx, test_idx = train_test_split(
                 valtest_idx, test_size=0.5, random_state=0, stratify=np.array(ts_numerators)[valtest_idx]
             )
         else: # cross validation case
-            raise NotImplementedError
+            if self.loo_index not in range(0,149):
+                raise ValueError(f"cross_validation must be an integer corresponding to the piece to leave out. {self.loo_index} is not valid.")
+            train_idx = [i for i in idxs if i != self.loo_index]
+            val_idx = [self.loo_index]
+            test_idx = [self.loo_index] #useless, but just to keep compatibility with the rest of the code
+
         # create the datasets
         if self.data_augmentation == "preprocess":
             self.dataset_train = JTBDatasetAugmented(
