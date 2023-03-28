@@ -739,7 +739,7 @@ def get_nra(score, untied=False):
     return nra
 
 
-def get_head_seq(dep_arcs, num_notes):
+def get_head_seq(dep_arcs, num_notes,check_unique_root = True):
     """Get the head sequence from the dependency arcs.
     Parameters
     ----------
@@ -750,12 +750,16 @@ def get_head_seq(dep_arcs, num_notes):
     head_seq : torch.tensor of shape (num_notes,)
         Head sequence.
     """
-    head_seq = torch.zeros(num_notes) - 1 # initialize at -1 to check for errors. Last note) node to have -1 is the root
+    head_seq = torch.zeros(num_notes+1) -1 # initialize at -1 to check for errors. The last node to be -1 is the root
     torch.sort
     for i, (start, end) in enumerate(dep_arcs):
         assert(head_seq[end] == -1)
         head_seq[end] = start
-    return torch.concatenate((torch.tensor([0]), head_seq + 1)) # add 1 to shift everything. 0 is then for the root
+    if check_unique_root:
+        assert torch.sum(head_seq == -1) == 1 # check if only the root is left
+        assert (head_seq == -1).nonzero()[0] == 0 # assert the root is at position 0
+    head_seq[head_seq ==-1] = 0
+    return head_seq # add 1 to shift everything. 0 is then for the root
 
 
 # --------------------- # Jazz Treebank # --------------------- #
@@ -921,11 +925,14 @@ class JTBDataset(Dataset):
             if (only_tree) or has_tree[i] : # if the piece has a tree
                 # compute arcs from the tree
                 d_arc, ch = parse_jht_to_dep_tree(tree_d)
-                d_arc = torch.tensor(d_arc)
-                cart_prod = torch.cartesian_prod(torch.arange(len(ch)), torch.arange(len(ch)))  # all possible pairs
-                pot_arcs = cart_prod[
-                    cart_prod[:, 0] != cart_prod[:, 1]
+                d_arc = torch.tensor(d_arc) + 1 # add one for the root
+                pot_arcs = torch.cartesian_prod(torch.arange(0,len(ch)+1), torch.arange(0,len(ch)+1))  # all possible pairs, plus root connections
+                pot_arcs = pot_arcs[
+                    pot_arcs[:, 0] != pot_arcs[:, 1]
                 ]  # remove self loops
+                pot_arcs = pot_arcs[pot_arcs[:,1] != 0] # remove arcs whose dependent is the root
+                # readd the loop at the root node
+                pot_arcs = torch.vstack((torch.tensor([0,0]),pot_arcs))
                 truth_mask = get_edges_mask(d_arc, pot_arcs)
                 # compute chord features
                 chord_feature = get_features_from_chord_labels(ch,ts_dict,dict_data[i]["beats"])
@@ -1081,6 +1088,7 @@ def parse_jht_to_dep_tree(jht_dict):
                 raise ValueError("Something went wrong with label", current_label)
             
     dep_arcs, root = _iterative_parse_jht(jht_dict)
+    dep_arcs.append((-1,root["index"])) # add connection to the root, with index -1
     return dep_arcs, all_leaves
 
 def noast(label):

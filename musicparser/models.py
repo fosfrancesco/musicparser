@@ -67,13 +67,13 @@ class ArcPredictionLightModel(LightningModule):
             self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
             self.val_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
         elif loss_type == 'ce':
-            self.train_loss = torch.nn.CrossEntropyLoss(ignore_index=0) # ignore the root node
-            self.val_loss = torch.nn.CrossEntropyLoss(ignore_index=0) # ignore the root node
+            self.train_loss = torch.nn.CrossEntropyLoss() # ignore the root node
+            self.val_loss = torch.nn.CrossEntropyLoss() # ignore the root node
         elif loss_type == 'both':
             self.train_loss_bce = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
             self.val_loss_bce = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
-            self.train_loss_ce = torch.nn.CrossEntropyLoss(ignore_index=0) # ignore the root node
-            self.val_loss_ce = torch.nn.CrossEntropyLoss(ignore_index=0) # ignore the root node
+            self.train_loss_ce = torch.nn.CrossEntropyLoss() # ignore the root node
+            self.val_loss_ce = torch.nn.CrossEntropyLoss() # ignore the root node
         else:
             raise ValueError(f"loss_type {loss_type} not supported")
         self.val_f1score = BinaryF1Score()
@@ -175,7 +175,7 @@ class ArcPredictionLightModel(LightningModule):
             val_fscore_postp = self.val_f1score_postp.cpu()(adj_pred_postp.flatten().cpu(), adj_target.flatten())
             self.log("val_fscore_postp", val_fscore_postp.item(), prog_bar=False, batch_size=1)
             # compute head accuracy
-            head_seqs_postp = get_head_seq(pred_arc_postp, num_notes) 
+            head_seqs_postp = get_head_seq(pred_arc_postp, num_notes, check_unique_root=False) 
             val_head_accuracy_postp = self.val_head_accuracy_postp.cpu()(head_seqs_postp.long(), head_seqs.long().cpu())
             self.log("val_head_accuracy_postp", val_head_accuracy_postp.item(), prog_bar=True, batch_size=1)
             # compute arcs accuracy
@@ -230,7 +230,7 @@ class ArcPredictionLightModel(LightningModule):
         test_fscore_postp = self.test_f1score_postp.cpu()(adj_pred_postp.flatten().cpu(), adj_target.flatten())
         self.log("test_fscore_postp", test_fscore_postp.item(), prog_bar=False, batch_size=1)
         # compute head accuracy
-        head_seqs_postp = get_head_seq(pred_arc_postp, num_notes) 
+        head_seqs_postp = get_head_seq(pred_arc_postp, num_notes,check_unique_root=False) 
         test_head_accuracy_postp = self.test_head_accuracy_postp.cpu()(head_seqs_postp.long(), head_seqs.long().cpu())
         self.log("test_head_accuracy_postp", test_head_accuracy_postp.item(), prog_bar=True, batch_size=1)
         # compute arcs accuracy
@@ -310,17 +310,17 @@ class ArcPredictionLightModel(LightningModule):
         return adj_pred
     
     def compute_adj_logits_root(self,pot_arcs, arc_pred_mask_logits, num_notes):
-        adj_pred_logits = to_dense(torch.sparse_coo_tensor(pot_arcs.T, arc_pred_mask_logits, (num_notes, num_notes)),fill_value=float("-inf")).to(arc_pred_mask_logits.device)
-        # add a new upper row and left column for the root to the adjency matrix
-        adj_pred_logits_root = torch.vstack((torch.zeros((1, num_notes),device = arc_pred_mask_logits.device), adj_pred_logits))
-        adj_pred_logits_root = torch.hstack((torch.zeros((num_notes+1, 1),device = arc_pred_mask_logits.device), adj_pred_logits_root))
-        adj_pred_logits_root[0,:] = float("-inf")
-        adj_pred_logits_root[:,0] = float("-inf")
-        # assign probability 0 of having root head to the dependent with lowest max prob
-        # row_wise_max = torch.max(adj_pred_logits_root, dim=0)[0]
-        # lowest_max_prob_index = torch.argmax(row_wise_max)
-        # adj_pred_logits_root[0,:] = 0
-        adj_pred_logits_root[0][0] = float("inf")
+        adj_pred_logits_root = to_dense(torch.sparse_coo_tensor(pot_arcs.T, arc_pred_mask_logits, (num_notes+1, num_notes+1)),fill_value=float("-inf")).to(arc_pred_mask_logits.device)
+        # # add a new upper row and left column for the root to the adjency matrix
+        # adj_pred_logits_root = torch.vstack((torch.zeros((1, num_notes),device = arc_pred_mask_logits.device), adj_pred_logits))
+        # adj_pred_logits_root = torch.hstack((torch.zeros((num_notes+1, 1),device = arc_pred_mask_logits.device), adj_pred_logits_root))
+        # adj_pred_logits_root[0,:] = float("-inf")
+        # adj_pred_logits_root[:,0] = float("-inf")
+        # # assign probability 0 of having root head to the dependent with lowest max prob
+        # # row_wise_max = torch.max(adj_pred_logits_root, dim=0)[0]
+        # # lowest_max_prob_index = torch.argmax(row_wise_max)
+        # # adj_pred_logits_root[0,:] = 0
+        # adj_pred_logits_root[0][0] = float("inf")
         return adj_pred_logits_root
     
     def compute_head_probs_root_from_adj(self,adj, num_notes):
@@ -691,6 +691,9 @@ class ArcDecoder(torch.nn.Module):
         
 
     def forward(self, z, pot_arcs):
+        # add column for the root element
+        z = torch.cat((torch.ones((1,z.shape[1]),device=z.device),z), dim = 0)
+        # proceed with the computation
         z = self.norm(z)
         if not self.pretrain_mode: # normal functioning, predicting arcs
             if self.biaffine:
