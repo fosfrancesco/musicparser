@@ -103,8 +103,8 @@ def main():
     else:
         wandb_logger = True
 
-    checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_accuracy_postp", mode="max")
-    early_stop_callback = EarlyStopping(monitor="val_accuracy_postp", min_delta=0.00, patience=patience, verbose=True, mode="max")
+    checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_head_accuracy_postp", mode="max")
+    early_stop_callback = EarlyStopping(monitor="val_head_accuracy_postp", min_delta=0.00, patience=patience, verbose=True, mode="max")
     lr_monitor = LearningRateMonitor(logging_interval='step')
     
     trainer = Trainer(
