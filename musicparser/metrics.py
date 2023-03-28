@@ -2,6 +2,7 @@ from torchmetrics.functional.classification import multiclass_accuracy
 from torchmetrics.classification.stat_scores import Metric
 import torch
 import re
+import numpy as np
 
 class VariableMulticlassAccuracy(Metric):
     r"""Computes `Accuracy`_ for multiclass tasks where every example can have a variable number of classes
@@ -25,6 +26,35 @@ class VariableMulticlassAccuracy(Metric):
 
         self.accuracy += torch.sum(preds == target).float() / target.numel()
         self.samples += 1
+
+    def compute(self):
+        return self.accuracy.float() / self.samples
+    
+class ArcsAccuracy(Metric):
+    r"""Computes `Arcs Accuracy`
+    """
+    is_differentiable = False
+    higher_is_better = True
+    full_state_update: bool = False
+
+    def __init__(self):
+        super().__init__()
+        self.add_state("accuracy", default=torch.tensor(0, dtype=torch.float32), dist_reduce_fx="sum")
+        self.add_state("samples", default=torch.tensor(0), dist_reduce_fx="sum")
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        if len(preds) == 0:
+            self.accuracy += 0
+            self.samples += 1
+        else:
+            view_preds = preds.numpy()
+            view_target = target.numpy()
+            view_preds = np.char.array(view_preds.astype(str))
+            view_target = np.char.array(view_target.astype(str))
+            view_preds = view_preds[:, 0] + "-" + view_preds[:, 1]
+            view_target = view_target[:, 0] + "-" + view_target[:, 1]
+            self.accuracy += np.sum(np.isin(view_preds,view_target)) / len(view_preds)
+            self.samples += 1
 
     def compute(self):
         return self.accuracy.float() / self.samples

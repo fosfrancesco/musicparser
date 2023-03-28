@@ -799,7 +799,7 @@ class JTBDataModule(LightningDataModule):
                 valtest_idx, test_size=0.5, random_state=0, stratify=np.array(ts_numerators)[valtest_idx]
             )
         else: # cross validation case
-            if self.loo_index not in range(0,149):
+            if self.loo_index not in range(0,150):
                 raise ValueError(f"cross_validation must be an integer corresponding to the piece to leave out. {self.loo_index} is not valid.")
             train_idx = [i for i in idxs if i != self.loo_index]
             val_idx = [self.loo_index]
