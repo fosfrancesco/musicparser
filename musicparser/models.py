@@ -242,13 +242,18 @@ class ArcPredictionLightModel(LightningModule):
         test_head_accuracy_postp = self.test_head_accuracy_postp.cpu()(head_seqs_postp.long(), head_seqs.long().cpu())
         self.log("test_head_accuracy_postp", test_head_accuracy_postp.item(), prog_bar=True, batch_size=1)
         # compute arcs accuracy
-        test_arc_accuracy_postp = self.test_arc_accuracy_postp.cpu()(pred_arc_postp.cpu(), truth_arc.cpu())
+        rootless_pred_arc_postp = pred_arc_postp[pred_arc_postp[:,0]!=0]
+        rootless_truth_arc = truth_arc[truth_arc[:,0]!=0]
+        test_arc_accuracy_postp = self.test_arc_accuracy_postp.cpu()(rootless_pred_arc_postp.cpu(), rootless_truth_arc.cpu())
         self.log("test_arc_accuracy_postp", test_arc_accuracy_postp.item(), prog_bar=True, batch_size=1)
         # compute c_tree span similarity
         pred_ctree = dtree2unlabeled_ctree(pred_arc_postp.cpu().tolist(), check_single_root=True)
         truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu().tolist(), check_single_root=True)
         test_span_sim = self.test_span_similarity.cpu()(pred_ctree, truth_ctree)
         self.log("test_ctree_sim", test_span_sim.item(), prog_bar=True, batch_size=1)
+        if not isinstance(self.logger, CSVLogger):
+            self.logger.log_text(key="test_head_seqs", columns = ["head_seqs","head_seqs_postp","truth_head_seqs" ], data= [[str(torch.argmax(adj_pred_logits_root, dim =0).tolist()), str(head_seqs_postp.tolist()),str(head_seqs.long().tolist())]])
+            self.logger.log_text(key="test_ctrees", columns = ["pred_ctree","truth_ctree"], data= [[str(pred_ctree.unlabeled_repr()),str(truth_ctree.unlabeled_repr())]])
 
     
     def predict_step(self, batch, batch_idx):
@@ -262,29 +267,31 @@ class ArcPredictionLightModel(LightningModule):
         truth_arc = pot_arcs[truth_arcs_mask.bool()]
         adj_pred_logits_root = self.compute_adj_logits_root(pot_arcs, arc_pred_mask_logits, num_notes)
         # compute binary F1 score and accuracy
-        adj_pred = self.pred_dlist2adj(pred_arc,num_notes)
-        adj_target = pyg.utils.to_dense_adj(truth_arc.T, max_num_nodes=num_notes).squeeze().long().cpu()
+        adj_pred = (adj_pred_logits_root > 0).long().cpu()
+        adj_target = self.compute_adj_root(truth_arc,num_notes)
         test_fscore = self.test_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
-        self.print("test_fscore", test_fscore.item())
+        print("test_fscore", test_fscore.item())
         test_head_accuracy = self.test_head_accuracy(torch.argmax(adj_pred_logits_root, dim =0), head_seqs.long())
-        self.print("test_head_accuracy", test_head_accuracy.item())
+        print("test_head_accuracy", test_head_accuracy.item())
         # postprocess
         adj_pred_postp, pred_arc_postp, head_seqs_postp = self.postprocess(adj_pred_logits_root, num_notes)
         # compute postprocessed F1 score
         test_fscore_postp = self.test_f1score_postp.cpu()(adj_pred_postp.flatten().cpu(), adj_target.flatten())
-        self.print("test_fscore_postp", test_fscore_postp.item())
+        print("test_fscore_postp", test_fscore_postp.item())
         # compute head accuracy
-        # head_seqs_postp = get_head_seq(pred_arc_postp, num_notes) 
+        # head_seqs_postp = get_head_seq(pred_arc_postp, num_notes,check_unique_root=False) 
         test_head_accuracy_postp = self.test_head_accuracy_postp.cpu()(head_seqs_postp.long(), head_seqs.long().cpu())
-        self.print("test_head_accuracy_postp", test_head_accuracy_postp.item())
+        print("test_head_accuracy_postp", test_head_accuracy_postp.item())
         # compute arcs accuracy
-        test_arc_accuracy_postp = self.test_arc_accuracy_postp.cpu()(pred_arc_postp.cpu(), truth_arc.cpu())
-        self.print("test_arc_accuracy_postp", test_arc_accuracy_postp.item())
+        rootless_pred_arc_postp = pred_arc_postp[pred_arc_postp[:,0]!=0]
+        rootless_truth_arc = truth_arc[truth_arc[:,0]!=0]
+        test_arc_accuracy_postp = self.test_arc_accuracy_postp.cpu()(rootless_pred_arc_postp.cpu(), rootless_truth_arc.cpu())
+        print("test_arc_accuracy_postp", test_arc_accuracy_postp.item())
         # compute c_tree span similarity
-        pred_ctree = dtree2unlabeled_ctree(pred_arc_postp.cpu().tolist())
-        truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu().tolist())
+        pred_ctree = dtree2unlabeled_ctree(pred_arc_postp.cpu().tolist(), check_single_root=True)
+        truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu().tolist(), check_single_root=True)
         test_span_sim = self.test_span_similarity.cpu()(pred_ctree, truth_ctree)
-        self.print("test_ctree_sim", test_span_sim.item())
+        print("test_ctree_sim", test_span_sim.item())
         return {"pot_arcs": pot_arcs, "arc_pred__mask_normalized" : arc_pred__mask_normalized,"head_seq_truth": head_seqs.long().cpu().tolist(),"head_seq_postp" : head_seqs_postp.cpu().tolist(), "head_seq" : torch.argmax(adj_pred_logits_root, dim =0).cpu().tolist() , "pred_arc" : pred_arc.cpu().tolist() , "pred_arc_postp": pred_arc_postp.cpu().tolist(), "truth_arc": truth_arc.cpu().tolist(), "pred_ctree": pred_ctree, "truth_ctree": truth_ctree}
 
         
