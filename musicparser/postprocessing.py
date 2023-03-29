@@ -30,6 +30,8 @@ class Node:
 
 
 def dtree2unlabeled_ctree(d_arcs, check_single_root = False):
+    # exclude loop arcs at 0
+    d_arcs = d_arcs[torch.sum(d_arcs,dim=1)!=0]
     # find root
     potential_roots = [arc[1] for arc in d_arcs.tolist() if arc[0] == 0 ]
     assert len(potential_roots) == 1

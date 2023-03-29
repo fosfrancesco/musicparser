@@ -26,6 +26,13 @@ config = wandb.config
 # CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/loo_JTB/matiptyo
 # CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/loo_JTB/matiptyo
 
+# Sweep 2
+
+# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweeps_JTB/ekr597pd
+# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweeps_JTB/ekr597pd
+# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweeps_JTB/ekr597pd
+# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweeps_JTB/ekr597pd
+
 
 def main(config):
     # set parameters from config

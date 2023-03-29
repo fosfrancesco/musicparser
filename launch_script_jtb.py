@@ -30,7 +30,7 @@ def main():
     parser.add_argument("--activation", type=str, default="gelu")
     parser.add_argument("--wandb_log", action="store_true", help="Use wandb for logging.")
     parser.add_argument("--num_workers", type=int, default=20)
-    parser.add_argument("--patience", type=int, default=20)
+    parser.add_argument("--patience", type=int, default=50)
     parser.add_argument("--data_augmentation", type=str, default="preprocess", help="'preprocess', 'no', or 'online'")
     parser.add_argument("--biaffine", action="store_true", help="Use biaffine arc decoder.")
     parser.add_argument("--pos_weight", action="store_true", help="Use positional weight on binary CE.")

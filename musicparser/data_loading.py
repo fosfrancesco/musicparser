@@ -755,11 +755,11 @@ def get_head_seq(dep_arcs, num_notes,check_unique_root = True):
     for i, (start, end) in enumerate(dep_arcs):
         assert(head_seq[end] == -1)
         head_seq[end] = start
-    if check_unique_root:
-        assert torch.sum(head_seq == -1) == 1 # check if only the root is left
-        assert (head_seq == -1).nonzero()[0] == 0 # assert the root is at position 0
-    head_seq[head_seq ==-1] = 0
-    return head_seq # add 1 to shift everything. 0 is then for the root
+    # if check_unique_root:
+    #     assert torch.sum(head_seq == -1) == 1 # check if only the root is left
+    #     assert (head_seq == -1).nonzero()[0] == 0 # assert the root is at position 0
+    # head_seq[head_seq ==-1] = 0
+    return head_seq
 
 
 # --------------------- # Jazz Treebank # --------------------- #
@@ -931,7 +931,7 @@ class JTBDataset(Dataset):
                     pot_arcs[:, 0] != pot_arcs[:, 1]
                 ]  # remove self loops
                 pot_arcs = pot_arcs[pot_arcs[:,1] != 0] # remove arcs whose dependent is the root
-                # readd the loop at the root node
+                # re-add the loop at the root node
                 pot_arcs = torch.vstack((torch.tensor([0,0]),pot_arcs))
                 truth_mask = get_edges_mask(d_arc, pot_arcs)
                 # compute chord features
@@ -1089,6 +1089,8 @@ def parse_jht_to_dep_tree(jht_dict):
             
     dep_arcs, root = _iterative_parse_jht(jht_dict)
     dep_arcs.append((-1,root["index"])) # add connection to the root, with index -1
+    # add self loop to the root
+    dep_arcs.append((-1,-1)) # add loop connection to the root, with index -1
     return dep_arcs, all_leaves
 
 def noast(label):

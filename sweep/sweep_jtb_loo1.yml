@@ -2,7 +2,7 @@ program: sweep_loo_jtb.py
 method: grid
 metric:
   goal: maximize
-  name: test_accuracy_postp
+  name: test_arc_accuracy_postp
 parameters:
   embeddings:
     values:

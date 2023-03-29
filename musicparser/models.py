@@ -227,7 +227,7 @@ class ArcPredictionLightModel(LightningModule):
         adj_pred_logits_root = self.compute_adj_logits_root(pot_arcs, arc_pred_mask_logits, num_notes)
         # compute binary F1 score and accuracy
         adj_pred = (adj_pred_logits_root > 0).long().cpu()
-        adj_target = self.compute_adj_root(truth_arc,num_notes)
+        adj_target = self.compute_adj_root(truth_arc,num_notes).long().cpu()
         test_fscore = self.test_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
         self.log("test_fscore", test_fscore.item(), prog_bar=False, batch_size=1)
         test_head_accuracy = self.test_head_accuracy(torch.argmax(adj_pred_logits_root, dim =0), head_seqs.long())
@@ -247,8 +247,8 @@ class ArcPredictionLightModel(LightningModule):
         test_arc_accuracy_postp = self.test_arc_accuracy_postp.cpu()(rootless_pred_arc_postp.cpu(), rootless_truth_arc.cpu())
         self.log("test_arc_accuracy_postp", test_arc_accuracy_postp.item(), prog_bar=True, batch_size=1)
         # compute c_tree span similarity
-        pred_ctree = dtree2unlabeled_ctree(pred_arc_postp.cpu().tolist(), check_single_root=True)
-        truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu().tolist(), check_single_root=True)
+        pred_ctree = dtree2unlabeled_ctree(pred_arc_postp.cpu())
+        truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu())
         test_span_sim = self.test_span_similarity.cpu()(pred_ctree, truth_ctree)
         self.log("test_ctree_sim", test_span_sim.item(), prog_bar=True, batch_size=1)
         if not isinstance(self.logger, CSVLogger):
@@ -268,7 +268,7 @@ class ArcPredictionLightModel(LightningModule):
         adj_pred_logits_root = self.compute_adj_logits_root(pot_arcs, arc_pred_mask_logits, num_notes)
         # compute binary F1 score and accuracy
         adj_pred = (adj_pred_logits_root > 0).long().cpu()
-        adj_target = self.compute_adj_root(truth_arc,num_notes)
+        adj_target = self.compute_adj_root(truth_arc,num_notes).long().cpu()
         test_fscore = self.test_f1score.cpu()(adj_pred.flatten(), adj_target.flatten())
         print("test_fscore", test_fscore.item())
         test_head_accuracy = self.test_head_accuracy(torch.argmax(adj_pred_logits_root, dim =0), head_seqs.long())
@@ -288,8 +288,8 @@ class ArcPredictionLightModel(LightningModule):
         test_arc_accuracy_postp = self.test_arc_accuracy_postp.cpu()(rootless_pred_arc_postp.cpu(), rootless_truth_arc.cpu())
         print("test_arc_accuracy_postp", test_arc_accuracy_postp.item())
         # compute c_tree span similarity
-        pred_ctree = dtree2unlabeled_ctree(pred_arc_postp.cpu().tolist(), check_single_root=True)
-        truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu().tolist(), check_single_root=True)
+        pred_ctree = dtree2unlabeled_ctree(pred_arc_postp.cpu())
+        truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu())
         test_span_sim = self.test_span_similarity.cpu()(pred_ctree, truth_ctree)
         print("test_ctree_sim", test_span_sim.item())
         return {"pot_arcs": pot_arcs, "arc_pred__mask_normalized" : arc_pred__mask_normalized,"head_seq_truth": head_seqs.long().cpu().tolist(),"head_seq_postp" : head_seqs_postp.cpu().tolist(), "head_seq" : torch.argmax(adj_pred_logits_root, dim =0).cpu().tolist() , "pred_arc" : pred_arc.cpu().tolist() , "pred_arc_postp": pred_arc_postp.cpu().tolist(), "truth_arc": truth_arc.cpu().tolist(), "pred_ctree": pred_ctree, "truth_ctree": truth_ctree}
