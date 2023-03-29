@@ -30,22 +30,19 @@ class Node:
 
 
 def dtree2unlabeled_ctree(d_arcs, check_single_root = False):
+    # find root
+    potential_roots = [arc[1] for arc in d_arcs.tolist() if arc[0] == 0 ]
+    assert len(potential_roots) == 1
+    root = potential_roots[0]
+    # exclude arcs that start at 0
+    d_arcs = d_arcs[d_arcs[:,0]!=0]
     # build head dictionary
     d = defaultdict(list)
-    for arc in d_arcs:
+    for arc in d_arcs.tolist():
         d[arc[0]].append(arc[1])
     # ensure the lists in the dictionary are sorted
     for v in d.values():
         v.sort()
-    # find root
-    head_noted = [arc[0] for arc in d_arcs]
-    dependent_nodes = [arc[1] for arc in d_arcs]
-    potential_roots = np.unique([k for k in head_noted if k not in dependent_nodes])
-    if check_single_root:
-        # assert(len(potential_roots) == 1)
-        if len(potential_roots)!=1:
-            print("MORE THAN ONE ROOT")
-    root = potential_roots[0]
     # build ctree
     node_root = Node(root)
 
@@ -143,7 +140,7 @@ def eisner(scores, return_probs = False):
     if return_probs:
         return heads, value_proj
     else:
-        return heads
+        return heads, value_proj
 
 
 def backtrack_eisner(incomplete_backtrack, complete_backtrack, s, t, direction, complete, heads):
