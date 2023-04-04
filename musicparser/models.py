@@ -59,6 +59,7 @@ class ArcPredictionLightModel(LightningModule):
             pretrain_mode,
         )
         pos_weight = 1 if pos_weight is None else pos_weight
+        self.data_type = data_type
         self.optimizer = optimizer
         self.warmup_steps = warmup_steps
         self.len_train_dataloader = len_train_dataloader
@@ -68,13 +69,13 @@ class ArcPredictionLightModel(LightningModule):
             self.train_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
             self.val_loss = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
         elif loss_type == 'ce':
-            self.train_loss = torch.nn.CrossEntropyLoss() 
-            self.val_loss = torch.nn.CrossEntropyLoss() 
+            self.train_loss = torch.nn.CrossEntropyLoss(ignore_index=-1) 
+            self.val_loss = torch.nn.CrossEntropyLoss(ignore_index=-1) 
         elif loss_type == 'both':
             self.train_loss_bce = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
             self.val_loss_bce = torch.nn.BCEWithLogitsLoss(pos_weight= torch.tensor([pos_weight]))
-            self.train_loss_ce = torch.nn.CrossEntropyLoss() 
-            self.val_loss_ce = torch.nn.CrossEntropyLoss() 
+            self.train_loss_ce = torch.nn.CrossEntropyLoss(ignore_index=-1) 
+            self.val_loss_ce = torch.nn.CrossEntropyLoss(ignore_index=-1) 
         else:
             raise ValueError(f"loss_type {loss_type} not supported")
         self.val_f1score = BinaryF1Score()
@@ -85,8 +86,8 @@ class ArcPredictionLightModel(LightningModule):
         self.val_span_similarity = CTreeSpanSimilarity()
         self.test_f1score = BinaryF1Score()
         self.test_f1score_postp = BinaryF1Score()
-        self.test_head_accuracy = VariableMulticlassAccuracy()
-        self.test_head_accuracy_postp = VariableMulticlassAccuracy()
+        self.test_head_accuracy = VariableMulticlassAccuracy(ignore_index=-1)
+        self.test_head_accuracy_postp = VariableMulticlassAccuracy(ignore_index=-1)
         self.test_arc_accuracy_postp = ArcsAccuracy()
         self.test_span_similarity = CTreeSpanSimilarity()
         self.pretrain_mode = pretrain_mode
@@ -151,7 +152,13 @@ class ArcPredictionLightModel(LightningModule):
             arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
             pred_arc = pot_arcs[torch.round(arc_pred__mask_normalized).squeeze().bool()]
             truth_arc = pot_arcs[truth_arcs_mask.bool()]
-            # add the extra line and row for the root node
+            # predict rest mask
+            if self.data_type == "notes":
+                # find rests
+                is_rest = head_seqs == -1
+            else:    
+                is_rest = torch.zeros_like(head_seqs).bool() # for chords there are no rests
+            # compute adjency matrix of logits predictions
             adj_pred_logits_root = self.compute_adj_logits_root(pot_arcs, arc_pred_mask_logits, num_notes)
             # compute loss
             if self.loss_type == 'bce':
@@ -172,7 +179,7 @@ class ArcPredictionLightModel(LightningModule):
             val_head_accuracy = self.val_head_accuracy(torch.argmax(adj_pred_logits_root, dim =0), head_seqs.long())
             self.log("val_head_accuracy", val_head_accuracy.item(), prog_bar=True, batch_size=1)
             # postprocess
-            adj_pred_postp, pred_arc_postp, head_seqs_postp = self.postprocess(adj_pred_logits_root, num_notes)
+            adj_pred_postp, pred_arc_postp, head_seqs_postp = self.postprocess(adj_pred_logits_root, num_notes, is_rest)
             # compute postprocessed F1 score
             val_fscore_postp = self.val_f1score_postp.cpu()(adj_pred_postp.flatten().cpu(), adj_target.flatten())
             self.log("val_fscore_postp", val_fscore_postp.item(), prog_bar=False, batch_size=1)
@@ -219,6 +226,12 @@ class ArcPredictionLightModel(LightningModule):
         note_seq, truth_arcs_mask, pot_arcs, head_seqs = batch
         note_seq, truth_arcs_mask, pot_arcs, head_seqs = note_seq[0], truth_arcs_mask[0], pot_arcs[0], head_seqs[0]
         num_notes = len(note_seq)
+        # predict rest mask
+        if self.data_type == "notes":
+            # find rests
+            is_rest = head_seqs == -1
+        else:    
+            is_rest = torch.zeros_like(head_seqs).bool() # for chords there are no rests
         # predict arcs
         arc_pred_mask_logits = self.module(note_seq, pot_arcs)
         arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
@@ -233,7 +246,7 @@ class ArcPredictionLightModel(LightningModule):
         test_head_accuracy = self.test_head_accuracy(torch.argmax(adj_pred_logits_root, dim =0), head_seqs.long())
         self.log("test_head_accuracy", test_head_accuracy.item(), prog_bar=True, batch_size=1)
         # postprocess
-        adj_pred_postp, pred_arc_postp, head_seqs_postp = self.postprocess(adj_pred_logits_root, num_notes)
+        adj_pred_postp, pred_arc_postp, head_seqs_postp = self.postprocess(adj_pred_logits_root, num_notes, is_rest)
         # compute postprocessed F1 score
         test_fscore_postp = self.test_f1score_postp.cpu()(adj_pred_postp.flatten().cpu(), adj_target.flatten())
         self.log("test_fscore_postp", test_fscore_postp.item(), prog_bar=False, batch_size=1)
@@ -376,7 +389,7 @@ class ArcPredictionLightModel(LightningModule):
     #     return adj_pred_postp, pred_arc_postp
     
 
-    def postprocess(self, arc_pred_logits_root, num_notes, alg = "eisner"):
+    def postprocess(self, arc_pred_logits_root, num_notes, is_rest, alg = "eisner"):
         # adj_pred_logits = torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_logits, (num_notes, num_notes)).to_dense().to(self.device)
         # adj_pred_probs = torch.nn.functional.log_softmax(adj_pred_logits,dim=0)
         # # add a new upper row and left column for the root to the adjency matrix
@@ -386,7 +399,7 @@ class ArcPredictionLightModel(LightningModule):
         # postprocess with chu-liu edmonds algorithm
         # adj_pred_log_probs_root = torch.nn.functional.sigmoid(arc_pred_logits_root)
         # adj_pred_log_probs_root = torch.nn.functional.softmax(arc_pred_logits_root,dim=0)
-        adj_pred_log_probs_root = arc_pred_logits_root
+        adj_pred_log_probs_root = arc_pred_logits_root[:,~is_rest][~is_rest,:]
         # adj_pred_log_probs_root[:,0] = float("-inf")
         
         if alg == "chuliu_edmonds": #transpose to have an adjency matrix with edges pointing toward the parent node and 
@@ -405,10 +418,21 @@ class ArcPredictionLightModel(LightningModule):
         # elif alg == "eisner_slow":
         #     head_seq = eisner_slow(adj_pred_log_probs_root.cpu().numpy())
         else:
-            raise ValueError("alg must be either eisner or chuliu_edmonds")
-        # head_seq = head_seq[1:] # remove the root
+            raise ValueError("alg must be either eisner or chuliu_edmonds") 
         
-        
+        # reintroduce rests if they exist
+        head_seq = np.array(head_seq)
+        if torch.sum(is_rest)>0:
+            for i,e in enumerate(is_rest):
+                if e:
+                    head_seq = np.insert(head_seq,i,-1)
+                    head_seq[head_seq>i] = head_seq[head_seq>i]+1
+
+            assert np.all(head_seq[is_rest.cpu()] == -1)
+            assert np.array_equal(head_seq[1:] ==-1,is_rest[1:].cpu())
+
+
+
         
         # structure the postprocess results in an adjency matrix with edges that point toward the child node. Also predict the list of d_arcs
         adj_pred_postp = torch.zeros((num_notes+1,num_notes+1), device=self.device)
@@ -418,6 +442,8 @@ class ArcPredictionLightModel(LightningModule):
                 # adj_pred_postp[0, 0] = 1
                 # pred_arc_postp.append([0, 0])
                 pass
+            elif head < 0: # rest element, we don't add it to the arcs, only to the matrix
+                adj_pred_postp[0, i] = 1
             elif head != 0:
                 # id is index in note list + 1
                 adj_pred_postp[head, i] = 1
@@ -506,15 +532,7 @@ class TransformerEncoder(torch.nn.Module):
         self.positional_encoder = PositionalEncoding(
             d_model=input_dim, dropout=dropout, max_len=200
         )
-        # self.dummy = DummyDecoder()
         if not rpr: # normal transformer with absolute positional representation
-            # To make a decoder-only transformer we need to use masked encoder layers
-            # Dummy decoder to essentially just return the encoder output
-            # self.transformer = nn.Transformer(
-            #     d_model=input_dim, nhead=n_heads, num_encoder_layers=encoder_depth,
-            #     num_decoder_layers=0, dropout=dropout, activation=activation,
-            #     dim_feedforward=hidden_dim, custom_decoder=self.dummy
-            # )
             encoder_layer = nn.TransformerEncoderLayer(d_model=input_dim, dim_feedforward=hidden_dim, nhead=n_heads, dropout =dropout, activation=activation)
             encoder_norm = nn.LayerNorm(input_dim)
             self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=encoder_depth, norm=encoder_norm)
@@ -522,21 +540,13 @@ class TransformerEncoder(torch.nn.Module):
             encoder_norm = nn.LayerNorm(input_dim)
             encoder_layer = TransformerEncoderLayerRPR(input_dim, n_heads, hidden_dim, dropout, activation=activation, er_len=200)
             self.transformer_encoder = TransformerEncoderRPR(encoder_layer, encoder_depth, encoder_norm)
-            # self.transformer = nn.Transformer(
-            #     d_model=input_dim, nhead=n_heads, num_encoder_layers=encoder_depth,
-            #     num_decoder_layers=0, dropout=dropout, activation=activation,
-            #     dim_feedforward=hidden_dim, custom_decoder=self.dummy, custom_encoder=encoder
-            # )
 
     def forward(self, z, src_mask=None):
-        # TODO: why this is rescaled like that?
         # add positional encoding
         z = self.positional_encoder(z)
         # reshape to (seq_len, batch = 1, input_dim)
         z = torch.unsqueeze(z,dim= 1)
         # run transformer encoder
-        # Since there are no true decoder layers, the tgt is unused
-        # Pytorch wants src and tgt to have some equal dims however
         z = self.transformer_encoder(src=z, mask=src_mask)
         # remove batch dim
         z = torch.squeeze(z, dim=1)

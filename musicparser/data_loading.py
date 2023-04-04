@@ -101,6 +101,7 @@ class TSDataModule(LightningDataModule):
         num_workers=4,
         will_use_embeddings=False,
         data_augmentation="no",
+        loo_index = None
     ):
         super(TSDataModule, self).__init__()
         if data_augmentation not in ["no", "online", "preprocess"]:
@@ -118,11 +119,15 @@ class TSDataModule(LightningDataModule):
             n_jobs=num_workers,
         )
         self.positive_weight = self.dataset.get_positive_weight()
+        # check for already setup
+        self.is_setup = False
 
     def prepare_data(self):
         pass
 
     def setup(self, stage=None):
+        if self.is_setup: # if already setup,
+            return
         idxs = range(len(self.dataset))
         ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
         train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=ts_numerators)
@@ -148,7 +153,7 @@ class TSDataModule(LightningDataModule):
         print(
             f"Train size :{len(self.dataset_train)}, Val size :{len(self.dataset_val)}, Test size :{len(self.dataset_test)}"
         )
-        # compute the positive weight to be used to balance the loss
+        self.is_setup = True
 
     def train_dataloader(self):
         return DataLoader(
@@ -215,7 +220,7 @@ class TSDataset(Dataset):
             n_feat = torch.tensor(n_feat)
             d_arc = torch.tensor(d_arc)
             # compute potential arcs, i.e., all arcs minus self loops and rests connections
-            indices = torch.arange(len(n_feat))
+            indices = torch.arange(-1,len(n_feat))
             cart_prod = torch.cartesian_prod(indices, indices)  # all possible pairs
             pot_arcs = cart_prod[
                 cart_prod[:, 0] != cart_prod[:, 1]
@@ -223,10 +228,16 @@ class TSDataset(Dataset):
             starting_rest_mask = n_feat[pot_arcs[:, 0]][:, 1]
             ending_rest_mask = n_feat[pot_arcs[:, 1]][:, 1]
             pot_arcs = pot_arcs[~np.logical_or(starting_rest_mask, ending_rest_mask)]
+            pot_arcs = pot_arcs[pot_arcs[:,1] != -1] # remove arcs whose dependent is the root
+            # re-add the loop at the root node
+            pot_arcs = torch.vstack((torch.tensor([-1,-1]),pot_arcs))
+            # shift everything by 1 to account for the root
+            pot_arcs = pot_arcs+1
             # compute the ground truth mask over the pot arcs
             truth_mask = get_edges_mask(d_arc, pot_arcs)
             # compute the head sequence
             head_seq = get_head_seq(d_arc, num_notes=len(n_feat))
+            # assert torch.min(head_seq) == 0
             # add everything to the dataset
             return {"score_file" : score_file, 
                     "n_feat" : n_feat, 
@@ -408,8 +419,10 @@ def ts_xml_to_dependency_tree(xml_file):
     tree = ET.parse(str(xml_file))
     xml_root = tree.getroot()
     dep_arcs, root = _iterative_parse(xml_root)
-    # # add the root
-    # dep_arcs.append(("ROOT", -1))
+    # add the root
+    dep_arcs.append(("ROOT", root))
+    # add the self loop to the root
+    dep_arcs.append(("ROOT", "ROOT"))
     return dep_arcs, root
 
 
@@ -637,6 +650,8 @@ def gttm_id_to_pt_id(gttm_id, measure_mapping, nra_untied):
     Returns:
         int: id of the note in the partitura nra_untied
     """
+    if gttm_id == "ROOT":
+        return "ROOT"
     measure_number = int(gttm_id.split("-")[1])
     note_number = int(gttm_id.split("-")[2])
     # notes_in_measure = np.where(measure_mapping == measure_number)[0]
@@ -654,15 +669,16 @@ def note_id_to_note_array_index(id, nra):
     Returns:
         int: index of the note in the partitura note array
     """
-    if id[0] == "r":
+    if id == "ROOT":
+        return -1
+    elif id[0] == "r":
         raise ValueError("Trying to build an arc from a rest")
-    if id[0] == "ROOT":
-        return "ROOT"
-    potential_indices = np.where(nra["id"] == id)[0]
-    if len(potential_indices) == 1:
-        return np.where(nra["id"] == id)[0][0]
     else:
-        raise Exception("Problem with finding note id: ", id)
+        potential_indices = np.where(nra["id"] == id)[0]
+        if len(potential_indices) == 1:
+            return np.where(nra["id"] == id)[0][0]
+        else:
+            raise Exception("Problem with finding note id: ", id)
 
 
 def get_dependency_arcs(ts_xml_file, score, nra_tied):
@@ -717,6 +733,8 @@ def get_note_features_and_dep_arcs(score_file, ts_xml_file):
     note_features, time_signature = get_note_features(score, nra)
     # compute dependency arcs
     dep_arcs, gttm_style_dep = get_dependency_arcs(ts_xml_file, score, nra)
+    # shift the dep arcs to the right to account for the root. Now they should be between 0 and N+1
+    dep_arcs = torch.tensor(dep_arcs)+1
     return note_features, dep_arcs, gttm_style_dep, time_signature
 
 
@@ -755,10 +773,7 @@ def get_head_seq(dep_arcs, num_notes,check_unique_root = True):
     for i, (start, end) in enumerate(dep_arcs):
         assert(head_seq[end] == -1)
         head_seq[end] = start
-    # if check_unique_root:
-    #     assert torch.sum(head_seq == -1) == 1 # check if only the root is left
-    #     assert (head_seq == -1).nonzero()[0] == 0 # assert the root is at position 0
-    # head_seq[head_seq ==-1] = 0
+    # the elements corresponding to rests will still have value -1. We will use this to ignore them during training
     return head_seq
 
 
