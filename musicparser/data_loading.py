@@ -101,13 +101,16 @@ class TSDataModule(LightningDataModule):
         num_workers=4,
         will_use_embeddings=False,
         data_augmentation="no",
-        loo_index = None
+        loo_index = None,
+        no_validation=False,
     ):
         super(TSDataModule, self).__init__()
         if data_augmentation not in ["no", "online", "preprocess"]:
             raise ValueError(
                 "data_augmentation must be one of 'no', 'online', 'preprocess'"
             )
+        self.loo_index = loo_index
+        self.no_validation = no_validation
         self.data_augmentation = data_augmentation
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -130,10 +133,27 @@ class TSDataModule(LightningDataModule):
             return
         idxs = range(len(self.dataset))
         ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
-        train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=ts_numerators)
-        val_idx, test_idx = train_test_split(
-            valtest_idx, test_size=0.5, random_state=0, #stratify=np.array(ts_numerators)[valtest_idx]
-        )
+        # train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=ts_numerators)
+        # val_idx, test_idx = train_test_split(
+        #     valtest_idx, test_size=0.5, random_state=0, #stratify=np.array(ts_numerators)[valtest_idx]
+        # )
+        if self.loo_index is None:
+            if not self.no_validation:
+                train_idx, valtest_idx = train_test_split(idxs, test_size=0.1, random_state=0, stratify=np.array(ts_numerators)[idxs])
+                val_idx, test_idx = train_test_split(
+                    valtest_idx, test_size=0.5, random_state=0, # stratify=np.array(ts_numerators)[valtest_idx]
+                )
+            else: # no validation case
+                train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=np.array(ts_numerators)[idxs])
+                val_idx = valtest_idx
+                test_idx = valtest_idx
+        else: # cross validation case
+            if self.loo_index not in range(0,len(self.dataset)):
+                raise ValueError(f"cross_validation must be an integer corresponding to the piece to leave out. {self.loo_index} is not valid.")
+            train_idx = [i for i in idxs if i != self.loo_index]
+            val_idx = [self.loo_index]
+            test_idx = [self.loo_index] #useless, but just to keep compatibility with the rest of the code
+
         # create the datasets
         if self.data_augmentation == "preprocess":
             self.dataset_train = TSDatasetAugmented(
@@ -786,7 +806,8 @@ class JTBDataModule(LightningDataModule):
         only_tree=True,
         tree_type="complete",
         data_augmentation="no",
-        loo_index = None
+        loo_index = None,
+        no_validation=False,
     ):
         super(JTBDataModule, self).__init__()
         if data_augmentation not in ["no", "online", "preprocess"]:
@@ -794,6 +815,7 @@ class JTBDataModule(LightningDataModule):
                 "data_augmentation must be one of 'no', 'online', 'preprocess'"
             )
         self.loo_index = loo_index # index for leave one out cross validation
+        self.no_validation = no_validation
         self.data_augmentation = data_augmentation
         self.batch_size = batch_size
         self.num_workers = num_workers
@@ -813,10 +835,15 @@ class JTBDataModule(LightningDataModule):
         idxs = [i for i , p_arcs in enumerate(self.dataset.pot_arcs) if len(p_arcs)!=0] # this should correspond to all 150 pieces with trees
         ts_numerators = [ts[0] for ts in self.dataset.time_signatures]
         if self.loo_index is None:
-            train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=np.array(ts_numerators)[idxs])
-            val_idx, test_idx = train_test_split(
-                valtest_idx, test_size=0.5, random_state=0, stratify=np.array(ts_numerators)[valtest_idx]
-            )
+            if not self.no_validation:
+                train_idx, valtest_idx = train_test_split(idxs, test_size=0.2, random_state=0, stratify=np.array(ts_numerators)[idxs])
+                val_idx, test_idx = train_test_split(
+                    valtest_idx, test_size=0.5, random_state=0, stratify=np.array(ts_numerators)[valtest_idx]
+                )
+            else: # no validation case
+                train_idx, valtest_idx = train_test_split(idxs, test_size=0.1, random_state=0, stratify=np.array(ts_numerators)[idxs])
+                val_idx = valtest_idx
+                test_idx = valtest_idx
         else: # cross validation case
             if self.loo_index not in range(0,150):
                 raise ValueError(f"cross_validation must be an integer corresponding to the piece to leave out. {self.loo_index} is not valid.")

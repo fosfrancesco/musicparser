@@ -44,7 +44,7 @@ def main():
     parser.add_argument('--optimizer', type= str, default="warmadamw", help="'adamw', 'radam', or 'warmadamw'" )
     parser.add_argument('--warmup_steps', type= int, default=50, help="warmup steps for warmadamw")
     parser.add_argument('--tree_type', type= str, default="open", help="'open' or 'complete'" )
-    parser.add_argument('--max_epochs', type= int, default=50, help="max epochs for training")
+    parser.add_argument('--max_epochs', type= int, default=60, help="max epochs for training")
 
     args = parser.parse_args()
 
@@ -83,11 +83,12 @@ def main():
     warmup_steps = args.warmup_steps
     tree_type = args.tree_type
     max_epochs = args.max_epochs
+    no_validation = True
 
     print("Starting a new run with the following parameters:")
     print(args)
 
-    datamodule = JTBDataModule(batch_size=1, num_workers=num_workers, data_augmentation=data_augmentation, only_tree=not pretrain, tree_type=tree_type)
+    datamodule = JTBDataModule(batch_size=1, num_workers=num_workers, data_augmentation=data_augmentation, only_tree=not pretrain, tree_type=tree_type, no_validation = no_validation)
     datamodule.setup()
     if use_pos_weight:
         pos_weight = int(datamodule.positive_weight)
@@ -111,14 +112,16 @@ def main():
         max_epochs=max_epochs, accelerator="auto", devices= devices, #strategy="ddp",
         num_sanity_val_steps=1,
         logger=wandb_logger,
-        callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],
+        # callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],
+        callbacks=[lr_monitor],
         deterministic=True,
         reload_dataloaders_every_n_epochs= 1 if data_augmentation=="online" else 0,
         log_every_n_steps=10
         )
 
     trainer.fit(model, datamodule)
-    trainer.test(model, datamodule,ckpt_path=checkpoint_callback.best_model_path)
+    # trainer.test(model, datamodule,ckpt_path=checkpoint_callback.best_model_path)
+    trainer.test(model, datamodule)
 
 
 

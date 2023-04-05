@@ -1,0 +1,67 @@
+program: sweep_train_ts.py
+method: random
+metric:
+  goal: maximize
+  name: test_head_accuracy_postp
+parameters:
+  embeddings:
+    values:
+      - "[16]"
+      - "[32]"
+      - "[64]"
+      - "[96]"
+      - "[128]"
+      - "[256]"
+    distribution: categorical
+  weight_decay:
+    values:
+      - 0.05
+    distribution: categorical
+  encoder_type:
+    values:
+      - transformer
+    distribution: categorical
+  activation:
+    values:
+      - gelu
+    distribution: categorical
+  n_layers:
+    values:
+      - 2
+    distribution: categorical
+  n_hidden:
+    values:
+      - 64
+    distribution: categorical
+  biaffine:
+    values:
+      - False
+    distribution: categorical
+  n_heads:
+    values:
+      - 8
+    distribution: categorical
+  dropout:
+    values:
+      - 0.21
+    distribution: categorical
+  lr:
+    max: 0.0005
+    min: 0.00009
+    distribution: uniform
+  loss_type:
+    values:
+      - "both"
+    distribution: categorical
+  use_pos_weight:
+    values:
+      - False
+    distribution: categorical
+  optimizer:
+    values:
+      - warmadamw
+    distribution: categorical
+  warmup_steps:
+    values:
+      - 50
+    distribution: categorical

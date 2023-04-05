@@ -12,12 +12,16 @@ class Node:
     def __init__(self,label):
         self.label = label
         self.children = []
+        self.parent = None
 
     def add_child(self, node):
         self.children.append(node)
+        node.parent = self
 
     def set_children(self, node1, node2):
         self.children = [node1, node2]
+        node1.parent = self
+        node2.parent = self
 
     def unlabeled_repr(self):
         if len(self.children) == 0:
@@ -28,23 +32,40 @@ class Node:
     def __str__(self):
         return str(self.unlabeled_repr())
 
+    def children_repr(self):
+        if len(self.children) == 0:
+            return [-1,-1]
+        else:
+            return [self.children[0].label,self.children[1].label]
+
+    def parent_repr(self):
+        if self.parent is None:
+            return -1
+        else:
+            return self.parent.label
+
+    def child_parent_repr(self):
+        return f"P{self.parent_repr()}C{[self.children_repr()]}"
+
+
 
 def dtree2unlabeled_ctree(d_arcs, check_single_root = False):
-    # exclude loop arcs at 0
-    d_arcs = d_arcs[torch.sum(d_arcs,dim=1)!=0]
-    # find root
-    potential_roots = [arc[1] for arc in d_arcs.tolist() if arc[0] == 0 ]
-    assert len(potential_roots) == 1
-    root = potential_roots[0]
-    # exclude arcs that start at 0
-    d_arcs = d_arcs[d_arcs[:,0]!=0]
     # build head dictionary
     d = defaultdict(list)
     for arc in d_arcs.tolist():
-        d[arc[0]].append(arc[1])
+        if not(arc[0] ==0 and arc[1]==0): # don't append self loop 0 to 0
+            d[arc[0]].append(arc[1])
     # ensure the lists in the dictionary are sorted
     for v in d.values():
         v.sort()
+    # find root
+    potential_roots = d[0]
+    assert len(potential_roots) == 1
+    # if check_single_root:
+    #     # assert(len(potential_roots) == 1)
+    #     if len(potential_roots)!=1:
+    #         print("MORE THAN ONE ROOT")
+    root = potential_roots[0]
     # build ctree
     node_root = Node(root)
 
@@ -142,7 +163,7 @@ def eisner(scores, return_probs = False):
     if return_probs:
         return heads, value_proj
     else:
-        return heads, value_proj
+        return heads
 
 
 def backtrack_eisner(incomplete_backtrack, complete_backtrack, s, t, direction, complete, heads):

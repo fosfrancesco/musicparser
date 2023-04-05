@@ -8,7 +8,7 @@ from torch.nn import CrossEntropyLoss
 from torchmetrics.classification import BinaryF1Score, BinaryAccuracy, MulticlassAccuracy
 import numpy as np
 
-from musicparser.metrics import CTreeSpanSimilarity, VariableMulticlassAccuracy, ArcsAccuracy
+from musicparser.metrics import CTreeSpanSimilarity, VariableMulticlassAccuracy, ArcsAccuracy, CTreeNodeSimilarity
 from musicparser.rpr import TransformerEncoderLayerRPR, TransformerEncoderRPR, DummyDecoder
 from musicparser.postprocessing import chuliu_edmonds_one_root, dtree2unlabeled_ctree, eisner, eisner_fast
 from musicparser.data_loading import DURATIONS, get_feats_one_hot, METRICAL_LEVELS, NUMBER_OF_PITCHES, CHORD_FORM, CHORD_EXTENSION, JTB_DURATION, get_head_seq
@@ -84,12 +84,14 @@ class ArcPredictionLightModel(LightningModule):
         self.val_head_accuracy_postp = VariableMulticlassAccuracy()
         self.val_arc_accuracy_postp = ArcsAccuracy()
         self.val_span_similarity = CTreeSpanSimilarity()
+        self.val_node_similarity = CTreeNodeSimilarity()
         self.test_f1score = BinaryF1Score()
         self.test_f1score_postp = BinaryF1Score()
         self.test_head_accuracy = VariableMulticlassAccuracy(ignore_index=-1)
         self.test_head_accuracy_postp = VariableMulticlassAccuracy(ignore_index=-1)
         self.test_arc_accuracy_postp = ArcsAccuracy()
         self.test_span_similarity = CTreeSpanSimilarity()
+        self.test_node_similarity = CTreeNodeSimilarity()
         self.pretrain_mode = pretrain_mode
         if pretrain_mode:
             # self.pre_train_loss = nn.ModuleDict({"root": CrossEntropyLoss(), "form": CrossEntropyLoss(), "ext": CrossEntropyLoss(), "dur": CrossEntropyLoss(), "met": CrossEntropyLoss()})
@@ -192,15 +194,17 @@ class ArcPredictionLightModel(LightningModule):
             rootless_truth_arc = truth_arc[truth_arc[:,0]!=0]
             val_arc_accuracy_postp = self.val_arc_accuracy_postp.cpu()(rootless_pred_arc_postp.cpu(), rootless_truth_arc.cpu())
             self.log("val_arc_accuracy_postp", val_arc_accuracy_postp.item(), prog_bar=True, batch_size=1)
-            # compute c_tree span similarity
+            # compute c_tree span and node similarity
             pred_ctree = dtree2unlabeled_ctree(pred_arc_postp.cpu())
             truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu())
             val_span_sim = self.val_span_similarity.cpu()(pred_ctree, truth_ctree)
             self.log("val_ctree_sim", val_span_sim.item(), prog_bar=True, batch_size=1)
+            val_node_sim = self.val_node_similarity.cpu()(pred_ctree, truth_ctree)
+            self.log("val_node_sim", val_node_sim.item(), prog_bar=True, batch_size=1)
             # log other useful stuff for debugging
-            if not isinstance(self.logger, CSVLogger):
-                self.logger.log_text(key="head_seqs", columns = ["head_seqs","head_seqs_postp","truth_head_seqs" ], data= [[str(torch.argmax(adj_pred_logits_root, dim =0).tolist()), str(head_seqs_postp.tolist()),str(head_seqs.long().tolist())]])
-                self.logger.log_text(key="ctrees", columns = ["pred_ctree","truth_ctree"], data= [[str(pred_ctree.unlabeled_repr()),str(truth_ctree.unlabeled_repr())]])
+            # if not isinstance(self.logger, CSVLogger):
+            #     self.logger.log_text(key="head_seqs", columns = ["head_seqs","head_seqs_postp","truth_head_seqs" ], data= [[str(torch.argmax(adj_pred_logits_root, dim =0).tolist()), str(head_seqs_postp.tolist()),str(head_seqs.long().tolist())]])
+            #     self.logger.log_text(key="ctrees", columns = ["pred_ctree","truth_ctree"], data= [[str(pred_ctree.unlabeled_repr()),str(truth_ctree.unlabeled_repr())]])
         else:
             # shift input sequence to the right, and shorten prediction by one, to compare with prediction at next position
             input = note_seq[:-1,:]
@@ -259,11 +263,13 @@ class ArcPredictionLightModel(LightningModule):
         rootless_truth_arc = truth_arc[truth_arc[:,0]!=0]
         test_arc_accuracy_postp = self.test_arc_accuracy_postp.cpu()(rootless_pred_arc_postp.cpu(), rootless_truth_arc.cpu())
         self.log("test_arc_accuracy_postp", test_arc_accuracy_postp.item(), prog_bar=True, batch_size=1)
-        # compute c_tree span similarity
+        # compute c_tree span and node similarity
         pred_ctree = dtree2unlabeled_ctree(pred_arc_postp.cpu())
         truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu())
         test_span_sim = self.test_span_similarity.cpu()(pred_ctree, truth_ctree)
         self.log("test_ctree_sim", test_span_sim.item(), prog_bar=True, batch_size=1)
+        test_node_sim = self.test_node_similarity.cpu()(pred_ctree, truth_ctree)
+        self.log("test_node_sim", test_node_sim.item(), prog_bar=True, batch_size=1)
         if not isinstance(self.logger, CSVLogger):
             self.logger.log_text(key="test_head_seqs", columns = ["head_seqs","head_seqs_postp","truth_head_seqs" ], data= [[str(torch.argmax(adj_pred_logits_root, dim =0).tolist()), str(head_seqs_postp.tolist()),str(head_seqs.long().tolist())]])
             self.logger.log_text(key="test_ctrees", columns = ["pred_ctree","truth_ctree"], data= [[str(pred_ctree.unlabeled_repr()),str(truth_ctree.unlabeled_repr())]])
@@ -300,43 +306,16 @@ class ArcPredictionLightModel(LightningModule):
         rootless_truth_arc = truth_arc[truth_arc[:,0]!=0]
         test_arc_accuracy_postp = self.test_arc_accuracy_postp.cpu()(rootless_pred_arc_postp.cpu(), rootless_truth_arc.cpu())
         print("test_arc_accuracy_postp", test_arc_accuracy_postp.item())
-        # compute c_tree span similarity
+        # compute c_tree span and node similarity
         pred_ctree = dtree2unlabeled_ctree(pred_arc_postp.cpu())
         truth_ctree = dtree2unlabeled_ctree(truth_arc.cpu())
         test_span_sim = self.test_span_similarity.cpu()(pred_ctree, truth_ctree)
         print("test_ctree_sim", test_span_sim.item())
+        test_node_sim = self.test_node_similarity.cpu()(pred_ctree, truth_ctree)
+        print("test_node_sim", test_node_sim.item())
         return {"pot_arcs": pot_arcs, "arc_pred__mask_normalized" : arc_pred__mask_normalized,"head_seq_truth": head_seqs.long().cpu().tolist(),"head_seq_postp" : head_seqs_postp.cpu().tolist(), "head_seq" : torch.argmax(adj_pred_logits_root, dim =0).cpu().tolist() , "pred_arc" : pred_arc.cpu().tolist() , "pred_arc_postp": pred_arc_postp.cpu().tolist(), "truth_arc": truth_arc.cpu().tolist(), "pred_ctree": pred_ctree, "truth_ctree": truth_ctree}
 
         
-        # note_seq, truth_arcs_mask, pot_arcs, head_seqs = batch
-        # note_seq, truth_arcs_mask, pot_arcs, head_seqs = note_seq[0], truth_arcs_mask[0], pot_arcs[0], head_seqs[0]
-        # num_notes = len(note_seq)
-        # # predict arcs
-        # arc_pred_mask_logits = self.module(note_seq, pot_arcs)
-        # arc_pred__mask_normalized = torch.sigmoid(arc_pred_mask_logits)
-        # pred_arc = pot_arcs[torch.round(arc_pred__mask_normalized).squeeze().bool()]
-        # truth_arc = pot_arcs[truth_arcs_mask.bool()].cpu().tolist()
-        # # postprocess
-        # _, pred_arc_postp = self.postprocess(pot_arcs, arc_pred__mask_normalized, num_notes)
-        # # compute the c_tree for the pred_arc and truth_arc
-        # pred_ctree = dtree2unlabeled_ctree(pred_arc_postp)
-        # truth_ctree = dtree2unlabeled_ctree(truth_arc)
-        # # compute c_tree similarity
-        # ctree_sim = self.test_span_sim.cpu()(pred_ctree, truth_ctree)
-        # print("c_tree_span_similarity", ctree_sim)
-        # print(pred_ctree)
-        # print(truth_ctree)
-        # return ctree_sim
-
-
-    # def pred_dlist2adj(self,pred_arc,num_notes):
-    #     # compute pred and ground truth adj matrices
-    #     if torch.sum(pred_arc) > 0:
-    #         # adj_pred = pyg.utils.to_dense_adj(pred_arc.T, max_num_nodes=num_notes+1).squeeze().cpu()
-    #         adj_pred = torch.sparse_coo_tensor(pred_arc.T, torch.ones((len(pred_arc))), (num_notes+1, num_notes+1),device=pred_arc.device).to_dense()
-    #     else: # to avoid exception in to_dense_adj when there is no predicted edge
-    #         adj_pred = torch.zeros((num_notes+1, num_notes+1)).squeeze().to(self.device).cpu()
-    #     return adj_pred
     
     def compute_adj_logits_root(self,pot_arcs, arc_pred_mask_logits, num_notes):
         # adj_pred_logits_root = to_dense(torch.sparse_coo_tensor(pot_arcs.T, arc_pred_mask_logits, (num_notes+1, num_notes+1)),fill_value=float("-inf")).to(arc_pred_mask_logits.device)
@@ -347,76 +326,24 @@ class ArcPredictionLightModel(LightningModule):
     def compute_adj_root(self,arcs, num_notes):
         return torch.sparse_coo_tensor(arcs.T, torch.ones((len(arcs))), (num_notes+1, num_notes+1),device=arcs.device).to_dense()
 
-    
-    # def compute_head_probs_root_from_adj(self,adj, num_notes):
-    #     head_adj = adj.T #now each row contains the probabilities for the heads of the corresponding note
-    #     # add a new upper row and left column for the root to the adjency matrix
-    #     head_adj_root = torch.vstack((torch.zeros((1, num_notes),device = head_adj.device), head_adj))
-    #     head_adj_root = torch.hstack((torch.zeros((num_notes+1, 1),device = head_adj_root.device), head_adj_root))
-    #     head_adj_root[0][0] = 1
-    #     return head_adj_root
-
-
-    # def postprocess(self, pot_arcs, arc_pred__mask_normalized, num_notes, alg = "eisner"):
-    #     adj_pred_probs = torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_normalized, (num_notes, num_notes)).to_dense().to(self.device)
-    #     # add a new upper row and left column for the root to the adjency matrix
-    #     adj_pred_probs_root = torch.vstack((torch.zeros((1, num_notes),device = self.device), adj_pred_probs))
-    #     adj_pred_probs_root = torch.hstack((torch.zeros((num_notes+1, 1),device = self.device), adj_pred_probs_root))
-    #     # take log probs
-    #     adj_pred_log_probs_root = torch.log(adj_pred_probs_root)
-    #     # postprocess with chu-liu edmonds algorithm
-    #     if alg == "chuliu_edmonds": #transpose to have an adjency matrix with edges pointing toward the parent node and 
-    #         head_seq = chuliu_edmonds_one_root(adj_pred_log_probs_root.cpu().numpy().T)
-    #     elif alg == "eisner":
-    #         head_seq = eisner(adj_pred_log_probs_root.cpu().numpy())
-    #     elif alg == "eisner_fast":
-    #         head_seq = eisner_fast(torch.unsqueeze(adj_pred_log_probs_root,dim=0).cpu().numpy(), torch.ones(1,num_notes))
-    #     # elif alg == "eisner_slow":
-    #     #     head_seq = eisner_slow(adj_pred_log_probs_root.cpu().numpy())
-    #     else:
-    #         raise ValueError("alg must be either eisner or chuliu_edmonds")
-    #     head_seq = head_seq[1:] # remove the root
-    #     # structure the postprocess results in an adjency matrix with edges that point toward the child node. Also predict the list of d_arcs
-    #     adj_pred_postp = torch.zeros((num_notes,num_notes))
-    #     pred_arc_postp = []
-    #     for i, head in enumerate(head_seq):
-    #         if head != 0:
-    #             # id is index in note list + 1
-    #             adj_pred_postp[head-1, i] = 1
-    #             pred_arc_postp.append([head-1, i])
-    #         else: #handle the root
-    #             root = i
-    #     return adj_pred_postp, pred_arc_postp
-    
+ 
 
     def postprocess(self, arc_pred_logits_root, num_notes, is_rest, alg = "eisner"):
-        # adj_pred_logits = torch.sparse_coo_tensor(pot_arcs.T, arc_pred__mask_logits, (num_notes, num_notes)).to_dense().to(self.device)
-        # adj_pred_probs = torch.nn.functional.log_softmax(adj_pred_logits,dim=0)
-        # # add a new upper row and left column for the root to the adjency matrix
-        # adj_pred_log_probs_root = torch.vstack((torch.ones((1, num_notes),device = self.device)*float("-inf"), adj_pred_probs))
-        # adj_pred_log_probs_root = torch.hstack((torch.ones((num_notes+1, 1),device = self.device)*float("-inf"), adj_pred_log_probs_root))
-        # adj_pred_log_probs_root[0][0] = 0
-        # postprocess with chu-liu edmonds algorithm
-        # adj_pred_log_probs_root = torch.nn.functional.sigmoid(arc_pred_logits_root)
-        # adj_pred_log_probs_root = torch.nn.functional.softmax(arc_pred_logits_root,dim=0)
         adj_pred_log_probs_root = arc_pred_logits_root[:,~is_rest][~is_rest,:]
-        # adj_pred_log_probs_root[:,0] = float("-inf")
         
         if alg == "chuliu_edmonds": #transpose to have an adjency matrix with edges pointing toward the parent node and 
             head_seq = chuliu_edmonds_one_root(adj_pred_log_probs_root.cpu().numpy().T)
         elif alg == "eisner":
-            head_seq, tree_score = eisner(adj_pred_log_probs_root.cpu().numpy())
+            head_seq = eisner(adj_pred_log_probs_root.cpu().numpy())
             if np.sum(head_seq == 0) >1: 
                 ###############!!!!!!!!!!!!!!!!!!!!!!!!!! This is a bad trick to avoid the postprocessing having only arcs to 0. 
                 # TODO: Solve this problem in the postp algo
                 adj_pred_log_probs_root[0,:] = float("-inf")
                 adj_pred_log_probs_root[0][0] = 0
                 adj_pred_log_probs_root[0][-1] = 0
-                head_seq, tree_score = eisner(adj_pred_log_probs_root.cpu().numpy())
+                head_seq = eisner(adj_pred_log_probs_root.cpu().numpy())
         # elif alg == "eisner_fast":
         #     head_seq = eisner_fast(torch.unsqueeze(adj_pred_log_probs_root,dim=0).cpu().numpy(), torch.ones(1,num_notes))
-        # elif alg == "eisner_slow":
-        #     head_seq = eisner_slow(adj_pred_log_probs_root.cpu().numpy())
         else:
             raise ValueError("alg must be either eisner or chuliu_edmonds") 
         
@@ -426,14 +353,17 @@ class ArcPredictionLightModel(LightningModule):
             for i,e in enumerate(is_rest):
                 if e:
                     head_seq = np.insert(head_seq,i,-1)
-                    head_seq[head_seq>i] = head_seq[head_seq>i]+1
-
-            assert np.all(head_seq[is_rest.cpu()] == -1)
-            assert np.array_equal(head_seq[1:] ==-1,is_rest[1:].cpu())
-
-
-
-        
+                    new_head_seq = head_seq.copy()
+                    elements_to_update = head_seq>i
+                    old_heads= head_seq[elements_to_update]
+                    new_head_seq[elements_to_update] = old_heads+1
+                    head_seq = new_head_seq
+        # check that everything is well formatted, this can be removed for speed
+        # assert len(np.unique(head_seq[is_rest.cpu()])) <= 1
+        # # assert np.unique(head_seq[is_rest.cpu()])[0] == -1
+        # temp_head_seq = head_seq.copy()
+        # temp_head_seq[temp_head_seq == -1] =0
+        # assert is_rest.cpu()[temp_head_seq].all() == False
         # structure the postprocess results in an adjency matrix with edges that point toward the child node. Also predict the list of d_arcs
         adj_pred_postp = torch.zeros((num_notes+1,num_notes+1), device=self.device)
         pred_arc_postp = []
@@ -448,6 +378,7 @@ class ArcPredictionLightModel(LightningModule):
                 # id is index in note list + 1
                 adj_pred_postp[head, i] = 1
                 pred_arc_postp.append([head, i])
+                assert not is_rest.cpu()[head]
             else: #handle the root
                 root = i
                 adj_pred_postp[head, i] = 1
