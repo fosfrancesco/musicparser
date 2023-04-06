@@ -82,11 +82,12 @@ def main():
     optimizer = args.optimizer
     warmup_steps = args.warmup_steps
     max_epochs = args.max_epochs
+    no_validation = True
 
     print("Starting a new run with the following parameters:")
     print(args)
 
-    datamodule = TSDataModule(batch_size=1, num_workers=num_workers, data_augmentation=data_augmentation)
+    datamodule = TSDataModule(batch_size=1, num_workers=num_workers, data_augmentation=data_augmentation, no_validation=no_validation)
     datamodule.setup()
     if use_pos_weight:
         pos_weight = int(datamodule.positive_weight)

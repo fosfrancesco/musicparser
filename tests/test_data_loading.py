@@ -5,6 +5,7 @@ from pathlib import Path
 
 from musicparser.data_loading import get_metrical_strength
 from musicparser.data_loading import get_note_features_and_dep_arcs
+from musicparser.models import reintroduce_rests
 
 
 def test_metrical_strength_68():
@@ -55,3 +56,18 @@ def test_ts_tree_piece40():
         assert(e in dep_arcs)
     for i,e in enumerate(dep_arcs):
         assert(e in expected_dep_arcs)
+
+
+def test_reintroduce_rests():
+    head_norest = np.array([-1,  2, 31,  4,  2,  4,  2,  8,  6,  8,  2, 12, 10, 14, 10, 14, 14, 18, 14, 20, 18, 20, 18, 22, 22, 24, 31, 26, 26, 28, 31,  0])
+    is_rest = np.array([False,  True,  True,  True, False, False,  True, False, False,  True,
+        False, False,  True, False, False,  True, False, False,  True, False,
+        False,  True, False, False,  True, False, False,  True, False, False,
+         True, False, False,  True, False, False,  True, False, False,  True,
+        False, False,  True, False, False,  True, False, False,  True, False,
+         True])
+    head_rest = reintroduce_rests(head_norest,is_rest)
+    
+    for i, head in enumerate(head_rest):
+        if head > 0:
+            assert not is_rest[head]

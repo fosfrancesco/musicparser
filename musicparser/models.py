@@ -350,14 +350,7 @@ class ArcPredictionLightModel(LightningModule):
         # reintroduce rests if they exist
         head_seq = np.array(head_seq)
         if torch.sum(is_rest)>0:
-            for i,e in enumerate(is_rest):
-                if e:
-                    head_seq = np.insert(head_seq,i,-1)
-                    new_head_seq = head_seq.copy()
-                    elements_to_update = head_seq>i
-                    old_heads= head_seq[elements_to_update]
-                    new_head_seq[elements_to_update] = old_heads+1
-                    head_seq = new_head_seq
+            head_seq = reintroduce_rests(head_seq, is_rest.cpu().numpy())
         # check that everything is well formatted, this can be removed for speed
         # assert len(np.unique(head_seq[is_rest.cpu()])) <= 1
         # # assert np.unique(head_seq[is_rest.cpu()])[0] == -1
@@ -412,17 +405,31 @@ class ArcPredictionLightModel(LightningModule):
             # print("setting_lr to", self.lr_scheduler.get_last_lr())
             # print("step", self.lr_scheduler.last_epoch)
 
-def to_dense(sparse, fill_value=None):
-    """
-    Return dense tensor from a sparse tensor using given fill value.
-    """
-    if fill_value is None or fill_value == 0:
-        return sparse.to_dense()
-    sparse = sparse.coalesce()
-    dense = torch.full(sparse.shape, fill_value, dtype=sparse.dtype, device=sparse.device)
-    for idx, value in zip(sparse._indices().t(), sparse._values()):
-        dense[tuple(idx)] = value
-    return dense
+def reintroduce_rests(head_seq, is_rest):
+    rest_indices = np.where(is_rest)[0]
+    new_head_seq = np.zeros_like(is_rest) -1
+    new_idx = 0
+    # insert the rests in the head_seq
+    for i,r in enumerate(is_rest):
+        if not r: # not rest
+            new_head_seq[i] = head_seq[new_idx]
+            new_idx += 1
+    # update indices of the heads according to rests
+    for i in rest_indices:
+            # add 1 to the heads that are after the rest
+            new_head_seq[new_head_seq>=i] += 1
+    return new_head_seq
+
+
+
+    # for i,e in enumerate(is_rest):
+    #     if e:
+    #         head_seq = np.insert(head_seq,i,-1)
+    #         new_head_seq = head_seq.copy()
+    #         elements_to_update = head_seq>i
+    #         old_heads= head_seq[elements_to_update]
+    #         new_head_seq[elements_to_update] = old_heads+1
+    #         head_seq = new_head_seq
 
 class CosineWarmupScheduler(torch.optim.lr_scheduler._LRScheduler):
     def __init__(self, optimizer, warmup, max_iters):
