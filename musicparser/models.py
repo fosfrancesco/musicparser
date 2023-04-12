@@ -362,9 +362,7 @@ class ArcPredictionLightModel(LightningModule):
         pred_arc_postp = []
         for i, head in enumerate(head_seq):
             if i== 0: # we add the self loop (0,0) to adj matrix, but not to the list of arcs
-                # adj_pred_postp[0, 0] = 1
-                # pred_arc_postp.append([0, 0])
-                pass
+                adj_pred_postp[0, 0] = 1
             elif head < 0: # rest element, we don't add it to the arcs, only to the matrix
                 adj_pred_postp[0, i] = 1
             elif head != 0:
@@ -372,7 +370,7 @@ class ArcPredictionLightModel(LightningModule):
                 adj_pred_postp[head, i] = 1
                 pred_arc_postp.append([head, i])
                 assert not is_rest.cpu()[head]
-            else: #handle the root
+            else: #handle the root. Same as before
                 root = i
                 adj_pred_postp[head, i] = 1
                 pred_arc_postp.append([head, i])
@@ -402,8 +400,6 @@ class ArcPredictionLightModel(LightningModule):
         super().optimizer_step(*args, **kwargs)
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()  # Step per iteration, we need to do it here, not to return the scheduler to the pytorch lightning trainer
-            # print("setting_lr to", self.lr_scheduler.get_last_lr())
-            # print("step", self.lr_scheduler.last_epoch)
 
 def reintroduce_rests(head_seq, is_rest):
     rest_indices = np.where(is_rest)[0]
@@ -420,16 +416,6 @@ def reintroduce_rests(head_seq, is_rest):
             new_head_seq[new_head_seq>=i] += 1
     return new_head_seq
 
-
-
-    # for i,e in enumerate(is_rest):
-    #     if e:
-    #         head_seq = np.insert(head_seq,i,-1)
-    #         new_head_seq = head_seq.copy()
-    #         elements_to_update = head_seq>i
-    #         old_heads= head_seq[elements_to_update]
-    #         new_head_seq[elements_to_update] = old_heads+1
-    #         head_seq = new_head_seq
 
 class CosineWarmupScheduler(torch.optim.lr_scheduler._LRScheduler):
     def __init__(self, optimizer, warmup, max_iters):
@@ -695,9 +681,7 @@ class ArcDecoder(torch.nn.Module):
                 # pass through a dropout layer, shape (num_pot_arcs, hidden_channels)
                 input1 = self.dropout(input1)
                 input2 = self.dropout(input2)
-                # # concatenate, like it is done in the stanza parser
-                # input1 =  torch.cat((input1, torch.ones((input1.shape[0],1), device = input1.device)), dim = -1)
-                # input2 = torch.cat((input2, torch.ones((input1.shape[0],1), device = input1.device)), dim = -1)
+                # pass through the bilinear layer
                 z = self.bilinear(input1, input2)
             else:
                 # concat the embeddings of the two nodes, shape (num_pot_arcs, 2*hidden_channels)

@@ -1,7 +1,7 @@
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, seed_everything
 import torch
 import random
 import argparse
@@ -15,15 +15,27 @@ from musicparser.models import ArcPredictionLightModel
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 # for repeatability
-torch.manual_seed(0)
-random.seed(0)
-torch.use_deterministic_algorithms(True)
+seed_everything(0,workers=True)
+# torch.manual_seed(0)
+# random.seed(0)
+# torch.use_deterministic_algorithms(True)
 
-wandb_run = wandb.init(group = "Sweep-TS", job_type="TS")
+wandb_run = wandb.init(group = "TS-LOO2", job_type="TS")
 # Config parameters are automatically set by W&B sweep agent
 config = wandb.config
 
 
+
+# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweeps_ts/5agohbto
+# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweeps_ts/5agohbto
+# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweeps_ts/5agohbto
+# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweeps_ts/5agohbto
+
+
+# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweeps_TS/qhfg6jtp
+# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweeps_TS/qhfg6jtp
+# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweeps_TS/qhfg6jtp
+# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweeps_TS/qhfg6jtp
 
 def main(config):
     # set parameters from config

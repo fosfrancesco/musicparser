@@ -20,6 +20,11 @@ class VariableMulticlassAccuracy(Metric):
     def update(self, preds: torch.Tensor, target: torch.Tensor):
         assert preds.shape == target.shape
 
+        # remove first element, which is the root
+        preds = preds[1:]
+        target = target[1:]
+
+        # mask to don't consider the rests
         mask = target != self.ignore_index
         preds = preds[mask]
         target = target[mask]
@@ -136,28 +141,29 @@ def ctree_span_similarity(pred, truth, return_intersection=False):
     else:
         return len(intersection)/len(spans_truth)
 
-def get_all_internal_node(tree):
-    all_internal_node = []
-    def _recursive_get_all_internal_node(node):
+def get_all_node(tree, include_leaf=True):
+    all_node = []
+    def _recursive_get_all_node(node, include_leaf):
         # if node is a leaf, end recursion
         if len(node.children) == 0:
+            if include_leaf:
+                all_node.append(node)
             return 
         else:
             # we traverse tree1, and match string with tree2             
             for child in node.children:
-                _recursive_get_all_internal_node(child)
+                _recursive_get_all_node(child, include_leaf=include_leaf)
             # add information of the current node
             # compute the span of the subtree rooted at the current node
-            all_internal_node.append(node)
+            all_node.append(node)
         
-    _recursive_get_all_internal_node(tree.children[0])
-    _recursive_get_all_internal_node(tree.children[1])
-    return all_internal_node
+    _recursive_get_all_node(tree, include_leaf=include_leaf)
+    return all_node
 
 def ctree_node_similarity(pred, truth, return_intersection=False):
     # compute all internal node of truth and pred
-    inode_truth = get_all_internal_node(truth)
-    inode_pred = get_all_internal_node(pred)
+    inode_truth = get_all_node(truth)
+    inode_pred = get_all_node(pred)
     # convert them to a numeric representation for easier comparison
     inode_truth = [n.child_parent_repr() for n in inode_truth]
     inode_pred = [n.child_parent_repr() for n in inode_pred]
@@ -167,6 +173,6 @@ def ctree_node_similarity(pred, truth, return_intersection=False):
     intersection = [node for node in inode_truth if node in set_node_pred]
     
     if return_intersection:
-        return len(intersection)/len(inode_truth), intersection
+        return len(intersection)/len(inode_pred), intersection
     else:
-        return len(intersection)/len(inode_truth)
+        return len(intersection)/len(inode_pred)

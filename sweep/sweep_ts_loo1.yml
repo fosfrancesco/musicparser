@@ -61,6 +61,6 @@ parameters:
       - 50
     distribution: categorical
   loo_index:
-    max: 296
+    max: 295
     min: 0
     distribution: int_uniform

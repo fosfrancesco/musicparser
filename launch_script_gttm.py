@@ -44,7 +44,7 @@ def main():
     parser.add_argument('--optimizer', type= str, default="warmadamw", help="'adamw', 'radam', or 'warmadamw'" )
     parser.add_argument('--warmup_steps', type= int, default=50, help="warmup steps for warmadamw")
     parser.add_argument('--tree_type', type= str, default="open", help="'open' or 'complete'" )
-    parser.add_argument('--max_epochs', type= int, default=20, help="max epochs for training")
+    parser.add_argument('--max_epochs', type= int, default=15, help="max epochs for training")
 
     args = parser.parse_args()
 
