@@ -23,3 +23,16 @@ def display_JHT_svg(piece_data,type = "head_predicted_postp", jupyter=True):
 
     spacy_dict = {"words": spacy_words, "arcs": spacy_arcs}
     return displacy.render(spacy_dict, style='dep', jupyter=jupyter, manual=True, options={"compact": False, "distance": 80, "arrow_stroke":1, "arrow_width":6, "word_spacing":20})
+
+
+def MIDInumber_to_note_name(number: int) -> str:
+    NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+    OCTAVES = list(range(11))
+    NOTES_IN_OCTAVE = len(NOTES)
+
+    octave = number // NOTES_IN_OCTAVE
+    assert octave in OCTAVES
+    assert 0 <= number <= 127
+    note = NOTES[number % NOTES_IN_OCTAVE]
+
+    return f"{note}{octave}"
