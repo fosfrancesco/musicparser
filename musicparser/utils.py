@@ -7,6 +7,9 @@ def display_JHT_svg(piece_data,type = "head_predicted_postp", jupyter=True):
         piece_data: a dictionary containing the piece data, as returned by the JHTDataModule
         type: the type of dependency tree to display. Can be one of "head_predicted_postp", "head_predicted", "head_truth"
         jupyter: whether to display the tree in a jupyter notebook or not
+
+    Returns:
+        An svg string containing the dependency tree (only if jupyter=False)
     """
     spacy_words = [{"text": chord, "tag": ""} for chord in piece_data["chords"]]
     spacy_arcs = []
