@@ -14,9 +14,6 @@ from musicparser.models import ArcPredictionLightModel
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 # for repeatability
-# torch.manual_seed(0)
-# random.seed(0)
-# torch.use_deterministic_algorithms(True)
 seed_everything(0,workers=True)
 
 def main():
