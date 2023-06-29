@@ -1,7 +1,7 @@
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, seed_everything
 import torch
 import random
 import argparse
@@ -15,36 +15,15 @@ from musicparser.models import ArcPredictionLightModel
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 # for repeatability
-torch.manual_seed(0)
-random.seed(0)
-torch.use_deterministic_algorithms(True)
+seed_everything(0,workers=True)
 
-wandb_run = wandb.init(group = "Sweep-TS", job_type="TS")
+wandb_run = wandb.init(group = "TS-LOO2", job_type="TS")
 # Config parameters are automatically set by W&B sweep agent
 config = wandb.config
 
-
-# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweep_TS/a8f6wlp4
-# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweep_TS/a8f6wlp4
-# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweep_TS/a8f6wlp4
-# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweep_TS/a8f6wlp4
-
-# only transformer
-
-# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweep_TS/76m4zi32
-# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweep_TS/76m4zi32
-# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweep_TS/76m4zi32
-# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweep_TS/76m4zi32
-
-# sweep 2
-
-# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweeps_TS/19u0bvr5
-# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweeps_TS/19u0bvr5
-# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweeps_TS/19u0bvr5
-# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweeps_TS/19u0bvr5
-
 def main(config):
     # set parameters from config
+    loo_index = config["loo_index"]
     n_layers = config["n_layers"]
     n_hidden = config["n_hidden"]
     lr = config["lr"]
@@ -80,10 +59,10 @@ def main(config):
     patience = 30
     use_pos_weight = True
     data_augmentation = "preprocess"
-    max_epochs = 60
+    max_epochs = 20
 
 
-    datamodule = TSDataModule(batch_size=1, num_workers=num_workers, will_use_embeddings=use_embeddings, data_augmentation=data_augmentation)
+    datamodule = TSDataModule(batch_size=1, num_workers=num_workers, will_use_embeddings=use_embeddings, data_augmentation=data_augmentation,loo_index=int(loo_index))
     datamodule.setup()
     if use_pos_weight:
         pos_weight = int(datamodule.positive_weight)
@@ -99,20 +78,18 @@ def main(config):
     else:
         wandb_logger = True
 
-    checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_head_accuracy_postp", mode="max")
-    early_stop_callback = EarlyStopping(monitor="val_head_accuracy_postp", min_delta=0.00, patience=patience, verbose=True, mode="max")
     lr_monitor = LearningRateMonitor(logging_interval='step')
     trainer = Trainer(
         max_epochs=max_epochs, accelerator="auto", devices= devices, #strategy="ddp",
         num_sanity_val_steps=1,
         logger=wandb_logger,
-        callbacks=[checkpoint_callback, early_stop_callback,lr_monitor],
+        callbacks=[lr_monitor],
         deterministic=True,
         reload_dataloaders_every_n_epochs= 1 if data_augmentation=="online" else 0,
         )
 
     trainer.fit(model, datamodule)
-    trainer.test(model, datamodule,ckpt_path=checkpoint_callback.best_model_path)
+    trainer.test(model, datamodule)
 
 
 

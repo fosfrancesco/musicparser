@@ -1,8 +1,8 @@
-program: sweep_train_jtb.py
-method: bayes
+program: launch_scripts/sweep_loo_ts.py
+method: grid
 metric:
   goal: maximize
-  name: test_ctree_sim
+  name: test_arc_accuracy_postp
 parameters:
   embeddings:
     values:
@@ -11,8 +11,6 @@ parameters:
   weight_decay:
     values:
       - 0.05
-      - 0.005
-      - 0.0005
     distribution: categorical
   encoder_type:
     values:
@@ -40,16 +38,11 @@ parameters:
     distribution: categorical
   dropout:
     values:
-      - 0.25
+      - 0.21
     distribution: categorical
   lr:
     values:
-      - 0.005
-      - 0.001
-      - 0.0005
-      - 0.0001
-      - 0.00005
-      - 0.00001
+      - 0.0004
     distribution: categorical
   loss_type:
     values:
@@ -62,9 +55,12 @@ parameters:
   optimizer:
     values:
       - warmadamw
-      - warmadam
     distribution: categorical
   warmup_steps:
-    max: 1000
-    min: 10
+    values:
+      - 50
+    distribution: categorical
+  loo_index:
+    max: 295
+    min: 0
     distribution: int_uniform

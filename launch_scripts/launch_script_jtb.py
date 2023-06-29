@@ -3,10 +3,16 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning import Trainer, seed_everything
 import torch
-import random
 import argparse
+import os
+import sys
+import inspect
 import warnings
 warnings.filterwarnings('ignore') # avoid printing the partitura warnings
+
+currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+parentdir = os.path.dirname(currentdir)
+sys.path.insert(0, parentdir) 
 
 from musicparser.data_loading import JTBDataModule
 from musicparser.models import ArcPredictionLightModel
@@ -14,9 +20,6 @@ from musicparser.models import ArcPredictionLightModel
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 # for repeatability
-# torch.manual_seed(0)
-# random.seed(0)
-# torch.use_deterministic_algorithms(True)
 seed_everything(0,workers=True)
 
 def main():

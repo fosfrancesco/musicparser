@@ -17,38 +17,13 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 # for repeatability
 seed_everything(0,workers=True)
 
-wandb_run = wandb.init(group = "Sweep-JTB", job_type="JTB")
+wandb_run = wandb.init(group = "LOO1", job_type="LOO1")
 # Config parameters are automatically set by W&B sweep agent
 config = wandb.config
 
-
-# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweeps_JTB/v00vqs1d
-# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweeps_JTB/v00vqs1d
-# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweeps_JTB/v00vqs1d
-# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweeps_JTB/v00vqs1d
-
-###### Sweep optimizers ######
-
-# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweeps_JTB/ult4ybsb
-# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweeps_JTB/ult4ybsb
-# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweeps_JTB/ult4ybsb
-# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweeps_JTB/ult4ybsb
-
-###### Sweep 2 ######
-# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweeps_JTB/p6ogzds5
-# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweeps_JTB/p6ogzds5
-# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweeps_JTB/p6ogzds5
-# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweeps_JTB/p6ogzds5
-
-###### Sweep Random ######	
-# CUDA_VISIBLE_DEVICES=0 wandb agent fosfrancesco/sweeps_JTB/pp5gcz7f
-# CUDA_VISIBLE_DEVICES=1 wandb agent fosfrancesco/sweeps_JTB/pp5gcz7f
-# CUDA_VISIBLE_DEVICES=2 wandb agent fosfrancesco/sweeps_JTB/pp5gcz7f
-# CUDA_VISIBLE_DEVICES=3 wandb agent fosfrancesco/sweeps_JTB/pp5gcz7f
-
-
 def main(config):
     # set parameters from config
+    loo_index = config["loo_index"]
     n_layers = config["n_layers"]
     n_hidden = config["n_hidden"]
     lr = config["lr"]
@@ -86,7 +61,7 @@ def main(config):
     tree_type = "open"
     max_epochs = 60
 
-    datamodule = JTBDataModule(batch_size=1, num_workers=num_workers, data_augmentation=data_augmentation, only_tree=not pretrain, tree_type = tree_type)
+    datamodule = JTBDataModule(batch_size=1, num_workers=num_workers, data_augmentation=data_augmentation, only_tree=not pretrain, tree_type = tree_type, loo_index=int(loo_index))
     datamodule.setup()
     if use_pos_weight:
         pos_weight = int(datamodule.positive_weight)
@@ -100,23 +75,20 @@ def main(config):
     name = ""
     wandb_logger = WandbLogger(log_model = True, project="Parsing JTB", name= name )
 
-
-    checkpoint_callback = ModelCheckpoint(save_top_k=1, monitor="val_accuracy_postp", mode="max")
-    early_stop_callback = EarlyStopping(monitor="val_accuracy_postp", min_delta=0.00, patience=patience, verbose=True, mode="max")
     lr_monitor = LearningRateMonitor(logging_interval='step')
 
     trainer = Trainer(
         max_epochs=max_epochs, accelerator="auto", devices= devices, #strategy="ddp",
         num_sanity_val_steps=1,
         logger=wandb_logger,
-        callbacks=[checkpoint_callback, early_stop_callback, lr_monitor],
+        callbacks=[lr_monitor],
         deterministic=True,
         reload_dataloaders_every_n_epochs= 1 if data_augmentation=="online" else 0,
-        log_every_n_steps=10
+        # log_every_n_steps=10
         )
 
     trainer.fit(model, datamodule)
-    trainer.test(model, datamodule,ckpt_path=checkpoint_callback.best_model_path)
+    trainer.test(model, datamodule)
 
 
 

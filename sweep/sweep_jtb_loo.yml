@@ -1,22 +1,15 @@
-program: sweep_train_jtb.py
-method: random
+program: launch_scripts/sweep_loo_jtb.py
+method: grid
 metric:
   goal: maximize
-  name: test_accuracy_postp
+  name: test_arc_accuracy_postp
 parameters:
   embeddings:
     values:
-      - "[16]"
-      - "[32]"
-      - "[64]"
       - "[96]"
-      - "[128]"
-      - "[256]"
     distribution: categorical
   weight_decay:
     values:
-      - 0.0005 
-      - 0.005
       - 0.05
     distribution: categorical
   encoder_type:
@@ -28,36 +21,29 @@ parameters:
       - gelu
     distribution: categorical
   n_layers:
-    max: 4
-    min: 1
-    distribution: int_uniform
+    values:
+      - 2
+    distribution: categorical
   n_hidden:
     values:
-      - 256
-      - 128
       - 64
-      - 32
     distribution: categorical
   biaffine:
     values:
-      - True
       - False
     distribution: categorical
   n_heads:
     values:
       - 8
-      - 4
-      - 2
-      - 1
     distribution: categorical
   dropout:
-    max: 0.5
-    min: 0
-    distribution: uniform
+    values:
+      - 0.21
+    distribution: categorical
   lr:
-    max: 0.0005
-    min: 0.00009
-    distribution: uniform
+    values:
+      - 0.0004
+    distribution: categorical
   loss_type:
     values:
       - "both"
@@ -74,3 +60,7 @@ parameters:
     values:
       - 50
     distribution: categorical
+  loo_index:
+    max: 149
+    min: 0
+    distribution: int_uniform
