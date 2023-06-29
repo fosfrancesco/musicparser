@@ -1,5 +1,7 @@
 # Dependency Parsing of Music Sequences
 
+<img src="./results/rendered_JHT/dependency_trees/ground_truth/Equinox.svg"> 
+
 This repository accompanies the publication: Francesco Foscarin, Daniel Harasim, and Gerhard Widmer, 
 "Predicting Music Hierarchies with a Graph-Based Neural Decoder", published in Proceedings of the 24th International Society for Music Information Retrieval Conference (ISMIR), Milan, 2023.
 
