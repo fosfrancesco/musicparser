@@ -14,7 +14,7 @@ The code in this repo considers two datasets of musical trees: time-span trees o
 All data for training and evaluation were obtained from the [Jazz Harmony Dataset](https://github.com/DCMLab/JazzHarmonyTreebank) and [GTTM database](https://gttm.jp/gttm/database/) and we invite you to cite the corresponding papers if you use these data.
 
 ## Running the system
-The easiest way of running the system is to call a launch script from the terminal. Two different scripts are available, one for the JHT dataset and one for the GTTM dataset. For example, to start an experiment with the JHT datasets you can write:
+The easiest way of running the system is to call a launch script from the terminal. The required packages are specified in the [requirements.txt](requirements.txt) file. Two different scripts are available, one for the JHT dataset and one for the GTTM dataset. For example, to start an experiment with the JHT datasets you can write:
 ```
 python launch_scripts/launch_script_jtb.py 
 ```
