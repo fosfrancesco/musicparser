@@ -55,7 +55,7 @@ Graphical rendering of the trees, such as this one for the JHT dataset (piece Eq
 <img src="./results/rendered_JHT/dependency_trees/ground_truth/Equinox.svg"> 
 or this one for the GTTM dataset (piece Waves of the Danube)
 <img src="./results/rendered_GTTM/dependency_trees/predicted_postprocessing/57_Waves of the Danube.txt.svg"> 
-are available in the results folder. Note that in this second case, each element of the sequence is not a chord, but a note. You can open the musicxml file with music notation software, such as Musescore, to see the melody in a standard music representation. There are two markdown files which collect and organize all rendered images and enable faster visual comparison of the ground truth, predicted, and predicted-with-postprocessing trees.
+are available in the results folder (note that in this second case, each element of the sequence is not a chord, but a note; you can open the musicxml file with music notation software, such as Musescore, to see the melody in a standard music representation). There are two markdown files which collect and organize all rendered images and enable faster visual comparison of the ground truth, predicted, and predicted-with-postprocessing trees.
 
 A small analysis of the graphical rendering and the code to produce it from the JSON files is available in [this](data_analysis.ipynb) notebook.
 
